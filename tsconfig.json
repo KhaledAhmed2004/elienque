@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    /* Target & Environment */
+    "target": "ES2022" /* Modern JS features for Node.js (Node 18+) */,
+    "module": "CommonJS" /* Standard Node.js module format */,
+    "moduleResolution": "node" /* Module resolution strategy */,
+
+    /* Folders */
+    "rootDir": "./src" /* Source code directory */,
+    "outDir": "./dist" /* Compiled JS output directory */,
+
+    /* Strict Type-Checking & Quality */
+    "strict": true /* Enable all strict type-checking */,
+    "noImplicitAny": true /* Raise error on expressions and declarations with implied 'any' type */,
+    "strictNullChecks": true /* Enable strict null checks */,
+    "strictFunctionTypes": true /* Ensure parameters and return values are subtype-compatible */,
+    "noFallthroughCasesInSwitch": true /* Report errors for fallthrough cases in switch */,
+
+    /* Module & Interop Features */
+    "esModuleInterop": true /* Interoperability between CommonJS and ES Modules */,
+    "allowSyntheticDefaultImports": true /* Allow default imports from modules without default export */,
+    "resolveJsonModule": true /* Enable importing .json files */,
+    "forceConsistentCasingInFileNames": true /* Ensure cross-platform filename casing */,
+
+    /* Debugging & Performance */
+    "sourceMap": true /* Generate source maps for debugging in production */,
+    "skipLibCheck": true /* Skip type checking of declaration files (.d.ts) */
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
+}
