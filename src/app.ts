@@ -23,9 +23,7 @@ const app = express();
 app.use(Morgan.successHandler);
 app.use(Morgan.errorHandler);
 
-// Client Hints: request OS/device info from browsers without frontend changes
 app.use((req, res, next) => {
-  // Ask for high-entropy client hints (Chrome/Edge)
   res.setHeader(
     'Accept-CH',
     [
@@ -39,7 +37,6 @@ app.use((req, res, next) => {
     ].join(', '),
   );
 
-  // Vary to keep caches/proxies from mixing responses across devices
   const varyHeaders = [
     'User-Agent',
     'Sec-CH-UA',
@@ -56,7 +53,6 @@ app.use((req, res, next) => {
     existingVary ? String(existingVary) + ', ' + varyHeaders : varyHeaders,
   );
 
-  // Encourage first-request delivery (Chrome only)
   res.setHeader(
     'Critical-CH',
     [
@@ -75,7 +71,6 @@ app.use(otelExpressMiddleware);
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, Postman)
       if (!origin) {
         maybeLogCors(origin, true);
         return callback(null, true);
@@ -89,11 +84,10 @@ app.use(
       }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    credentials: true, // allow cookies/auth headers
+    credentials: true,
   }),
 );
 
-// Explicitly handle preflight OPTIONS requests
 app.options(
   '*',
   cors({
@@ -103,42 +97,33 @@ app.options(
   }),
 );
 
-// Body parser
-// Special handling for webhook routes - they need raw body for signature verification
 app.use('/api/v1/payments/webhook', express.raw({ type: 'application/json' }));
 
-// For all other routes, use JSON parsing
 app.use((req, res, next) => {
   if (req.path.includes('/webhook')) {
-    return next(); // Skip JSON parsing for webhook routes
+    return next();
   }
   express.json({ limit: '10mb' })(req, res, next);
 });
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// for reading refresh tokens from cookies
 app.use(cookieParser());
 
 app.use(requestContextInit);
 app.use(clientInfo);
 app.use(requestLogger);
 
-// Static files
 app.use('/uploads', express.static('uploads'));
 
-// API routes
 app.use('/api/v1', router);
 
-// Live response
 app.get('/', (req: Request, res: Response) =>
   res.sendFile(path.join(__dirname, '../public/live-response.html')),
 );
 
-// Global error handler
 app.use(globalErrorHandler);
 
-// 404 handler
 app.use((req, res) => {
   res.status(StatusCodes.NOT_FOUND).json({
     success: false,

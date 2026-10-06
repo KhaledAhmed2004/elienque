@@ -38,7 +38,7 @@ const createStripeAccount = async (
       email: user.email,
       firstName: user.name.split(' ')[0],
       lastName: user.name.split(' ')[1] || '',
-      city: user.serviceAreaId ? user.serviceAreaId.toString() : undefined,
+      city: undefined,
       metadata: {
         user_id: data.userId.toString(),
         account_type: data.accountType,

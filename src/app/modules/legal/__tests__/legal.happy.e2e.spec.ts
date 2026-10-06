@@ -16,7 +16,7 @@ import app from '../../../../app';
 import { LegalPage } from '../legal.model';
 import { ILegalPage } from '../legal.interface';
 import { User } from '../../user/user.model';
-import { USER_ROLES, COMPANY_ROLE } from '../../../../enums/user';
+import { USER_ROLES } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
 import config from '../../../../config';
 import { StatusCodes } from 'http-status-codes';
@@ -62,7 +62,7 @@ const assertSuccessResponse = (body: any) => {
 
 const createTestUserAndToken = async (
   role: string,
-  companyRole: string,
+  
   email: string,
 ) => {
   const userId = new mongoose.Types.ObjectId().toString();
@@ -73,7 +73,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     accountState: 'VERIFIED',
   });
 
@@ -104,14 +104,14 @@ beforeAll(async () => {
 
   const adminData = await createTestUserAndToken(
     USER_ROLES.ADMIN,
-    COMPANY_ROLE.OWNER,
+    
     'admin-legal@test.com',
   );
   adminAccessToken = adminData.token;
 
   const userData = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'user-legal@test.com',
   );
   userAccessToken = userData.token;

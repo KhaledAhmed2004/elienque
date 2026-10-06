@@ -40,7 +40,7 @@ export type AuthOptions = {
  *
  * Usage:
  * ```ts
- * router.post('/vehicles', auth(USER_ROLES.USER, AUTH_POLICIES.ALLOW_PENDING_ONBOARDING), ...);
+ * router.post('/vehicles', auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER, AUTH_POLICIES.ALLOW_PENDING_ONBOARDING), ...);
  * ```
  */
 export const AUTH_POLICIES = {
@@ -140,7 +140,7 @@ const auth = (...args: AuthArgument[]) => {
       }
 
       if (
-        verifiedPayload.appState === APP_STATE.PENDING &&
+        verifiedPayload.accountState === ACCOUNT_STATE.UNVERIFIED &&
         !options.allowPending
       ) {
         throw new ApiError(

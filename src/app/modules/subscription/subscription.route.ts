@@ -16,7 +16,7 @@ const router = express.Router();
 // নিজের সাবস্ক্রিপশন স্ট্যাটাস/প্ল্যান দেখায় (Stripe থাকলে লাইভ সিঙ্ক)
 router.get(
   '/me',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   SubscriptionController.getMySubscriptionController
 );
 
@@ -24,7 +24,7 @@ router.get(
 // নির্দিষ্ট plan দিয়ে Stripe Checkout session তৈরি করে (redirect URL রিটার্ন)
 router.post(
   '/checkout',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   rateLimitMiddleware({ windowMs: 60_000, max: 20, routeName: 'subscription-checkout' }),
   validateRequest(SubscriptionValidation.createCheckoutSessionSchema),
   SubscriptionController.createCheckoutSessionController
@@ -34,7 +34,7 @@ router.post(
 // Stripe Billing Portal session তৈরি করে (Manage Subscription / Payment Method)
 router.post(
   '/portal',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(SubscriptionValidation.createPortalSessionSchema),
   SubscriptionController.createPortalSessionController
 );
@@ -43,7 +43,7 @@ router.post(
 // লোকালি Free প্ল্যানে সুইচ করে (Stripe সাবস্ক্রিপশন ছাড়াই)
 router.post(
   '/choose/free',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   SubscriptionController.chooseFreePlanController
 );
 
@@ -56,7 +56,7 @@ router.post(
 // Apple App Store receipt ভেরিফাই করে সাবস্ক্রিপশন একটিভ করে
 router.post(
   '/verify-apple',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   rateLimitMiddleware({ windowMs: 60_000, max: 30, routeName: 'subscription-verify-apple' }),
   validateRequest(SubscriptionValidation.verifyAppleSchema),
   SubscriptionController.verifyAppleController
@@ -66,7 +66,7 @@ router.post(
 // Google Play purchase token ভেরিফাই ও acknowledge করে সাবস্ক্রিপশন একটিভ করে
 router.post(
   '/verify-google',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   rateLimitMiddleware({ windowMs: 60_000, max: 30, routeName: 'subscription-verify-google' }),
   validateRequest(SubscriptionValidation.verifyGoogleSchema),
   SubscriptionController.verifyGoogleController
@@ -76,7 +76,7 @@ router.post(
 // মোবাইল অ্যাপ থেকে Restore Purchases ট্যাপ করলে সাবস্ক্রিপশন রিস্টোর করে
 router.post(
   '/restore',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   rateLimitMiddleware({ windowMs: 60_000, max: 30, routeName: 'subscription-restore' }),
   validateRequest(SubscriptionValidation.restoreSchema),
   SubscriptionController.restorePurchasesController
@@ -86,7 +86,7 @@ router.post(
 // অ্যাপ লঞ্চের সময় ইউজারের বর্তমান সাবস্ক্রিপশন স্ট্যাটাস রিটার্ন করে
 router.get(
   '/status',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   SubscriptionController.getStatusController
 );
 

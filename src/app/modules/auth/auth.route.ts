@@ -51,14 +51,14 @@ router.post(
 // 2.6 Logout
 router.post(
   '/logout',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   AuthController.logoutUser,
 );
 
 // 2.7 Get Current User Profile / Status
 router.get(
   '/me',
-  auth(USER_ROLES.USER, USER_ROLES.ADMIN, { allowPending: true }),
+  auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER, USER_ROLES.ADMIN, { allowPending: true }),
   AuthController.getMyStatus,
 );
 
@@ -77,7 +77,7 @@ router.post(
 
 router.post(
   '/change-password',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(AuthValidation.changePasswordSchema),
   AuthController.changePassword,
 );

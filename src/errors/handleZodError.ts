@@ -1,30 +1,4 @@
-// import { ZodError } from 'zod';
-// import { IErrorMessage } from '../types/errors.types';
-
-// const handleZodError = (error: ZodError) => {
-//   const errorMessages: IErrorMessage[] = error.errors.map(el => {
-//     return {
-//       path: el.path[el.path.length - 1],
-//       message: el.message,
-//     };
-//   });
-
-//   const statusCode = 400;
-//   return {
-//     statusCode,
-//     message: 'Validation Error',
-//     errorMessages,
-//   };
-// };
-
-// export default handleZodError;
-
-import {
-  ZodError,
-  ZodIssueCode,
-  ZodInvalidTypeIssue,
-  ZodUnrecognizedKeysIssue,
-} from 'zod';
+import { ZodError, ZodIssueCode } from 'zod';
 import { IErrorMessage } from '../types/errors.types';
 import { closest } from 'fastest-levenshtein';
 
@@ -33,31 +7,31 @@ const cleanPath = (pathArray: (string | number)[]): string =>
   pathArray.join('.').replace(/^body\./, '');
 
 const handleZodError = (
-  error: ZodError
+  error: any,
 ): { statusCode: number; message: string; errorMessages: IErrorMessage[] } => {
   const allErrorMessages: IErrorMessage[] = [];
   const missingFields: string[] = [];
   const coveredFields: string[] = [];
 
   // Collect expected fields for suggestions
-  const expectedFields = Array.from(
+  const expectedFields: string[] = Array.from(
     new Set(
       error.errors
-        .flatMap(issue =>
+        .flatMap((issue: any) =>
           issue.code === ZodIssueCode.invalid_type && issue.path.length > 1
             ? [String(issue.path[1])]
-            : []
+            : [],
         )
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 
   // Single pass over all Zod issues
-  error.errors.forEach(issue => {
+  error.errors.forEach((issue: any) => {
     switch (issue.code) {
       case ZodIssueCode.unrecognized_keys: {
-        const unrec = issue as ZodUnrecognizedKeysIssue;
-        (unrec.keys || []).forEach(key => {
+        const unrec = issue as any;
+        (unrec.keys || []).forEach((key: any) => {
           const cleanKey = key.replace(/^body\./, '');
           const suggestion = closest(cleanKey, expectedFields);
           if (suggestion) coveredFields.push(suggestion);
@@ -72,7 +46,7 @@ const handleZodError = (
       }
 
       case ZodIssueCode.invalid_type: {
-        const invalid = issue as ZodInvalidTypeIssue;
+        const invalid = issue as any;
         const path = cleanPath(invalid.path);
 
         if (invalid.received === 'undefined') {

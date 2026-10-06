@@ -12,7 +12,7 @@ router.post(
   '/',
   auth(
     USER_ROLES.ADMIN,
-    USER_ROLES.USER,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
     { allowRestricted: true },
   ),
   validateRequest(SupportValidation.createSupportZodSchema),
@@ -24,7 +24,7 @@ router.get(
   '/my-tickets',
   auth(
     USER_ROLES.ADMIN,
-    USER_ROLES.USER,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
     { allowRestricted: true },
   ),
   SupportController.getMyTickets,
@@ -35,7 +35,7 @@ router.post(
   '/:id/messages',
   auth(
     USER_ROLES.ADMIN,
-    USER_ROLES.USER,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
     { allowRestricted: true },
   ),
   validateRequest(SupportValidation.addMessageZodSchema),
@@ -47,7 +47,7 @@ router.get(
   '/:id',
   auth(
     USER_ROLES.ADMIN,
-    USER_ROLES.USER,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
     { allowRestricted: true },
   ),
   SupportController.getSupportById,

@@ -17,49 +17,49 @@ router.post(
 // Create/manage Stripe Connect account
 router.post(
   '/stripe/account',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   StripeConnectController.createStripeAccountController
 );
 
 // Stripe onboarding link — visible to tasker/admin
 router.get(
   '/stripe/onboarding',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   StripeConnectController.getOnboardingLinkController
 );
 
 // Check Stripe onboarding status — all roles
 router.get(
   '/stripe/onboarding-status',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   StripeConnectController.checkOnboardingStatusController
 );
 
 // Payment history — poster/tasker/super admin
 router.get(
   '/history',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   PaymentController.getPaymentHistoryController
 );
 
 // Get current PaymentIntent + client_secret by bidId
 router.get(
   '/by-bid/:bidId/current-intent',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   PaymentController.getCurrentIntentByBidController
 );
 
 // Refund payment — poster/super admin
 router.post(
   '/refund/:paymentId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   PaymentController.refundPaymentController
 );
 
 // Specific payment details — role-based access
 router.get(
   '/:paymentId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   PaymentController.getPaymentByIdController
 );
 

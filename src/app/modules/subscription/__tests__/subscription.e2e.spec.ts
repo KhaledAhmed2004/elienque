@@ -13,7 +13,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import app from '../../../../app';
 import { User } from '../../user/user.model';
 import { Subscription as SubscriptionModel } from '../subscription.model';
-import { USER_ROLES, COMPANY_ROLE } from '../../../../enums/user';
+import { USER_ROLES } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
 import config from '../../../../config';
 import axios from 'axios';
@@ -36,13 +36,13 @@ describe('Subscription & IAP End-to-End HTTP API Suite', () => {
       email: 'member-iap@test.com',
       password: 'Password123!',
       phone: '+12345678901',
-      role: USER_ROLES.USER,
-      companyRole: COMPANY_ROLE.CHAUFFEUR,
+      role: USER_ROLES.PROMOTER,
+      : 
       accountState: 'VERIFIED',
     });
 
     testUserToken = jwtHelper.createToken(
-      { id: testUserId, userId: testUserId, role: USER_ROLES.USER, email: 'member-iap@test.com' },
+      { id: testUserId, userId: testUserId, role: USER_ROLES.PROMOTER, email: 'member-iap@test.com' },
       config.jwt.jwt_secret as string,
       '1h'
     );

@@ -20,7 +20,7 @@ describe('Auth Middleware (BDD Suite)', () => {
   const createValidUser = (overrides?: Partial<JwtUser>): JwtUser => ({
     id: 'usr_12345',
     email: 'test.user@example.com',
-    role: USER_ROLES.USER,
+    role: USER_ROLES.PROMOTER,
     accountState: ACCOUNT_STATE.VERIFIED,
     appState: APP_STATE.ACTIVE,
     ...overrides,
@@ -41,7 +41,7 @@ describe('Auth Middleware (BDD Suite)', () => {
   describe('Authentication & Token Extraction', () => {
     describe('when the Authorization header is missing', () => {
       it('should reject the request with 401 Unauthorized', async () => {
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -55,7 +55,7 @@ describe('Auth Middleware (BDD Suite)', () => {
     describe('when the Authorization scheme is not Bearer', () => {
       it('should reject non-Bearer schemes (e.g. Basic) with 401 Unauthorized', async () => {
         req.headers = { authorization: 'Basic dXNlcjpwYXNz' };
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -67,7 +67,7 @@ describe('Auth Middleware (BDD Suite)', () => {
 
       it('should reject lowercase "bearer" scheme with 401 Unauthorized', async () => {
         req.headers = { authorization: 'bearer valid.token.here' };
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -81,7 +81,7 @@ describe('Auth Middleware (BDD Suite)', () => {
     describe('when the Bearer token is empty or only whitespace', () => {
       it('should reject an empty token with 401 Unauthorized', async () => {
         req.headers = { authorization: 'Bearer ' };
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -93,7 +93,7 @@ describe('Auth Middleware (BDD Suite)', () => {
 
       it('should reject a whitespace-only token with 401 Unauthorized', async () => {
         req.headers = { authorization: 'Bearer    ' };
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -121,7 +121,7 @@ describe('Auth Middleware (BDD Suite)', () => {
           throw jwtError;
         });
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -140,7 +140,7 @@ describe('Auth Middleware (BDD Suite)', () => {
           throw expiredError;
         });
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -159,7 +159,7 @@ describe('Auth Middleware (BDD Suite)', () => {
           throw nbfError;
         });
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
@@ -177,7 +177,7 @@ describe('Auth Middleware (BDD Suite)', () => {
           throw customError;
         });
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith(customError);
@@ -196,7 +196,7 @@ describe('Auth Middleware (BDD Suite)', () => {
     it('should reject a null payload with 401 Invalid token payload', async () => {
       vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(null as unknown as JwtUser);
 
-      const middleware = auth(USER_ROLES.USER);
+      const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
       await middleware(req as Request, res as Response, next);
 
       expect(getNextError()).toMatchObject({
@@ -208,7 +208,7 @@ describe('Auth Middleware (BDD Suite)', () => {
     it('should reject a string/primitive payload with 401 Invalid token payload', async () => {
       vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue('string_payload' as unknown as JwtUser);
 
-      const middleware = auth(USER_ROLES.USER);
+      const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
       await middleware(req as Request, res as Response, next);
 
       expect(getNextError()).toMatchObject({
@@ -219,11 +219,11 @@ describe('Auth Middleware (BDD Suite)', () => {
 
     it('should reject a payload missing the "id" claim', async () => {
       vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue({
-        role: USER_ROLES.USER,
+        role: USER_ROLES.PROMOTER,
         email: 'test@example.com',
       } as unknown as JwtUser);
 
-      const middleware = auth(USER_ROLES.USER);
+      const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
       await middleware(req as Request, res as Response, next);
 
       expect(getNextError()).toMatchObject({
@@ -238,7 +238,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         email: 'test@example.com',
       } as unknown as JwtUser);
 
-      const middleware = auth(USER_ROLES.USER);
+      const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
       await middleware(req as Request, res as Response, next);
 
       expect(getNextError()).toMatchObject({
@@ -253,7 +253,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         role: ['ADMIN'],
       } as unknown as JwtUser);
 
-      const middleware = auth(USER_ROLES.USER);
+      const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
       await middleware(req as Request, res as Response, next);
 
       expect(getNextError()).toMatchObject({
@@ -276,7 +276,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const suspendedUser = createValidUser({ accountState: ACCOUNT_STATE.SUSPENDED });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(suspendedUser);
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(getNextError()).toMatchObject({
@@ -289,7 +289,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const suspendedUser = createValidUser({ accountState: ACCOUNT_STATE.SUSPENDED });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(suspendedUser);
 
-        const middleware = auth(USER_ROLES.USER, { allowRestricted: true });
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER, { allowRestricted: true });
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith();
@@ -302,7 +302,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const verifiedUser = createValidUser({ accountState: ACCOUNT_STATE.VERIFIED });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(verifiedUser);
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith();
@@ -324,7 +324,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const pendingUser = createValidUser({ appState: APP_STATE.PENDING });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(pendingUser);
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(getNextError()).toMatchObject({
@@ -338,7 +338,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const pendingUser = createValidUser({ appState: APP_STATE.PENDING });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(pendingUser);
 
-        const middleware = auth(USER_ROLES.USER, { allowPending: true });
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER, { allowPending: true });
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith();
@@ -351,7 +351,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const activeUser = createValidUser({ appState: APP_STATE.ACTIVE });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(activeUser);
 
-        const middleware = auth(USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith();
@@ -381,7 +381,7 @@ describe('Auth Middleware (BDD Suite)', () => {
       });
 
       it('should reject non-matching user role with 403 Forbidden', async () => {
-        const regularUser = createValidUser({ role: USER_ROLES.USER });
+        const regularUser = createValidUser({ role: USER_ROLES.PROMOTER,});
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(regularUser);
 
         const middleware = auth(USER_ROLES.ADMIN);
@@ -396,10 +396,10 @@ describe('Auth Middleware (BDD Suite)', () => {
 
     describe('when route allows multiple roles (e.g. ADMIN and USER)', () => {
       it('should allow USER role', async () => {
-        const user = createValidUser({ role: USER_ROLES.USER });
+        const user = createValidUser({ role: USER_ROLES.PROMOTER,});
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(user);
 
-        const middleware = auth(USER_ROLES.ADMIN, USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith();
@@ -409,7 +409,7 @@ describe('Auth Middleware (BDD Suite)', () => {
         const admin = createValidUser({ role: USER_ROLES.ADMIN });
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(admin);
 
-        const middleware = auth(USER_ROLES.ADMIN, USER_ROLES.USER);
+        const middleware = auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
         await middleware(req as Request, res as Response, next);
 
         expect(next).toHaveBeenCalledWith();
@@ -418,7 +418,7 @@ describe('Auth Middleware (BDD Suite)', () => {
 
     describe('when route has no role restrictions (empty roles list)', () => {
       it('should allow any authenticated user with a valid token regardless of role', async () => {
-        const user = createValidUser({ role: USER_ROLES.USER });
+        const user = createValidUser({ role: USER_ROLES.PROMOTER,});
         vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(user);
 
         const middleware = auth();
@@ -438,7 +438,7 @@ describe('Auth Middleware (BDD Suite)', () => {
       const fullUserPayload: JwtUser = {
         id: 'usr_complete_99',
         email: 'complete@example.com',
-        role: USER_ROLES.USER,
+        role: USER_ROLES.PROMOTER,
         accountState: ACCOUNT_STATE.VERIFIED,
         appState: APP_STATE.ACTIVE,
         serviceAreaId: 'area_51',
@@ -447,7 +447,7 @@ describe('Auth Middleware (BDD Suite)', () => {
       req.headers = { authorization: 'Bearer valid.jwt.token' };
       vi.spyOn(jwtHelper, 'verifyToken').mockReturnValue(fullUserPayload);
 
-      const middleware = auth(USER_ROLES.USER);
+      const middleware = auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
       await middleware(req as Request, res as Response, next);
 
       expect(next).toHaveBeenCalledTimes(1);

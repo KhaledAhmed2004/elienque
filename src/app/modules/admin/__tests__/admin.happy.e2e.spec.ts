@@ -21,7 +21,7 @@ import { Deal } from '../../deal/deal.model';
 import { Subscription } from '../../subscription/subscription.model';
 import {
   USER_ROLES,
-  COMPANY_ROLE,
+
   APP_STATE,
   ACCOUNT_STATE,
   VEHICLE_STATUS,
@@ -82,7 +82,7 @@ const assertSuccessResponse = (body: any) => {
 
 const createTestUserAndToken = async (
   role: string,
-  companyRole: string,
+  
   email: string,
   appState: APP_STATE = APP_STATE.ACTIVE,
   accountState: ACCOUNT_STATE = ACCOUNT_STATE.VERIFIED,
@@ -95,7 +95,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     appState,
     accountState,
   });
@@ -132,7 +132,7 @@ beforeAll(async () => {
 
   const adminData = await createTestUserAndToken(
     USER_ROLES.ADMIN,
-    COMPANY_ROLE.OWNER,
+    
     'admin-main@test.com',
   );
   adminAccessToken = adminData.token;
@@ -154,8 +154,8 @@ describe('Admin Module E2E Tests - Happy Paths & Business Workflows', () => {
 
     // Seed a standard chauffeur for management testing
     const chauffeur = await createTestUserAndToken(
-      USER_ROLES.USER,
-      COMPANY_ROLE.CHAUFFEUR,
+      USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+      
       `chauffeur-${Date.now()}@test.com`,
       APP_STATE.PENDING,
       ACCOUNT_STATE.UNVERIFIED,

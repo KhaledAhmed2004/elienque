@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
 const objectIdValidator = z
-  .string({ required_error: 'Legal ID is required' })
+  .string({ error: 'Legal ID is required' })
   .regex(/^[0-9a-fA-F]{24}$/, { message: 'Invalid MongoDB ObjectId format' });
 
 const createLegalPage = z.object({
   body: z.object({
-    title: z.string({ required_error: 'Title is required' }).trim().min(1).max(200),
+    title: z.string({ error: 'Title is required' }).trim().min(1).max(200),
     content: z.string().max(100000, 'Content cannot exceed 100,000 characters').optional(),
   }),
 });

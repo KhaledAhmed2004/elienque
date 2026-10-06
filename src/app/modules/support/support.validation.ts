@@ -2,14 +2,14 @@ import { z } from 'zod';
 
 const createSupportZodSchema = z.object({
   body: z.object({
-    subject: z.string({ required_error: 'Subject is required' }).min(1),
-    message: z.string({ required_error: 'Message is required' }).min(1),
+    subject: z.string().min(1, 'Subject is required'),
+    message: z.string().min(1, 'Message is required'),
   }),
 });
 
 const addMessageZodSchema = z.object({
   body: z.object({
-    message: z.string({ required_error: 'Message is required' }).min(1),
+    message: z.string().min(1, 'Message is required'),
   }),
 });
 

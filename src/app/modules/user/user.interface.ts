@@ -3,25 +3,9 @@ import {
   ACCOUNT_STATE,
   APP_STATE,
   CARD_PAYMENT_STATUS,
-  COMPANY_ROLE,
   USER_ROLES,
 } from '../../../enums/user';
 import { GrowthType } from '../../../helpers/analytics/analytics.types';
-
-export type IPaymentMethods = {
-  zelle?: {
-    email?: string;
-  };
-  venmo?: {
-    username?: string;
-  };
-  cashApp?: {
-    cashtag?: string;
-  };
-  cardPayment?: {
-    status?: CARD_PAYMENT_STATUS;
-  };
-};
 
 export type IUser = {
   name: string;
@@ -30,36 +14,11 @@ export type IUser = {
   email: string;
   password?: string; // Optional because of select: false
   phone: string;
-  serviceAreaId?: Types.ObjectId;
-  serviceArea?: any; // Populated or legacy alias
-  companyName?: string;
-  company?: string; // Legacy alias
-  companyRole?: COMPANY_ROLE;
   profilePicture?: string;
-  drivingLicense?: {
-    image?: string;
-    expiryDate?: Date;
-  };
-  hackLicense?: {
-    image?: string;
-    expiryDate?: Date;
-  };
-  localPermit?: {
-    image?: string;
-    expiryDate?: Date;
-  };
   accountState: ACCOUNT_STATE;
-  appState?: APP_STATE;
-  isOnboard?: boolean;
-  mustChangePassword?: boolean;
-  suspensionOrigin?: ACCOUNT_STATE;
   deviceTokens?: string[];
-  selectedVehicle?: Types.ObjectId;
-  favoriteChauffeurs?: Types.ObjectId[];
   averageRating: number;
   totalReviews: number;
-  badges?: string[];
-  paymentMethods?: IPaymentMethods;
   loginAttempts: number;
   lockUntil?: Date;
   approvedAt?: Date;
@@ -72,6 +31,7 @@ export type IUser = {
   rejectedBy?: Types.ObjectId;
   reactivatedAt?: Date;
   reactivatedBy?: Types.ObjectId;
+  paymentMethods?: any;
   authentication?: {
     hashedOtp?: string;
     expireAt?: Date;

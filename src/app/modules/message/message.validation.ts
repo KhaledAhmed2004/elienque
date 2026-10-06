@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const objectIdValidator = z
-  .string({ required_error: 'Chat ID is required' })
+  .string({ error: 'Chat ID is required' })
   .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
 
 const sendMessageZodSchema = z.object({

@@ -5,7 +5,6 @@ import {
   ACCOUNT_STATE,
   APP_STATE,
   CARD_PAYMENT_STATUS,
-  COMPANY_ROLE,
   USER_ROLES,
 } from '../../../enums/user';
 import { IUser, UserModal } from './user.interface';
@@ -17,14 +16,10 @@ const userSchema = new Schema<IUser>(
       required: true,
       trim: true,
     },
-    nickname: {
-      type: String,
-      trim: true,
-    },
     role: {
       type: String,
       enum: Object.values(USER_ROLES),
-      default: USER_ROLES.USER,
+      default: USER_ROLES.PROMOTER,
     },
     email: {
       type: String,
@@ -48,116 +43,22 @@ const userSchema = new Schema<IUser>(
       unique: true,
       sparse: true,
     },
-    serviceAreaId: {
-      type: Schema.Types.ObjectId,
-      ref: 'ServiceArea',
-    },
-    serviceArea: {
-      type: String,
-      trim: true,
-    },
-    companyName: {
-      type: String,
-      trim: true,
-    },
-    company: {
-      type: String,
-      trim: true,
-    },
-    companyRole: {
-      type: String,
-      enum: Object.values(COMPANY_ROLE),
-      required: function (this: IUser) {
-        return this.role !== USER_ROLES.ADMIN;
-      },
-    },
     profilePicture: {
       type: String,
       default: 'https://i.ibb.co/z5YHLV9/profile.png',
-    },
-    drivingLicense: {
-      image: { type: String },
-      expiryDate: { type: Date },
-    },
-    hackLicense: {
-      image: { type: String },
-      expiryDate: { type: Date },
-    },
-    localPermit: {
-      image: { type: String },
-      expiryDate: { type: Date },
     },
     accountState: {
       type: String,
       enum: Object.values(ACCOUNT_STATE),
       default: ACCOUNT_STATE.UNVERIFIED,
     },
-    appState: {
-      type: String,
-      enum: Object.values(APP_STATE),
-      default: null,
-    },
-    isOnboard: {
-      type: Boolean,
-      default: false,
-    },
-    mustChangePassword: {
-      type: Boolean,
-      default: false,
-    },
-    suspensionOrigin: {
-      type: String,
-      enum: Object.values(ACCOUNT_STATE),
-      default: null,
-    },
     deviceTokens: {
       type: [String],
       default: [],
     },
-    selectedVehicle: {
-      type: Schema.Types.ObjectId,
-      ref: 'Vehicle',
-      default: null,
-    },
-    favoriteChauffeurs: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-      },
-    ],
-    averageRating: {
-      type: Number,
-      default: 0,
-    },
     totalReviews: {
       type: Number,
       default: 0,
-    },
-    badges: {
-      type: [String],
-      default: [],
-    },
-    paymentMethods: {
-      type: {
-        zelle: {
-          email: { type: String, trim: true },
-        },
-        venmo: {
-          username: { type: String, trim: true },
-        },
-        cashApp: {
-          cashtag: { type: String, trim: true },
-        },
-        cardPayment: {
-          status: {
-            type: String,
-            enum: Object.values(CARD_PAYMENT_STATUS),
-            default: CARD_PAYMENT_STATUS.NOT_ACCEPTED,
-          },
-        },
-      },
-      _id: false,
-      default: {},
     },
     loginAttempts: {
       type: Number,
@@ -274,12 +175,12 @@ userSchema.statics.isMatchPassword = async (
 //check user
 userSchema.pre('save', async function (next) {
 
-  //password hash
-  if (this.isModified('password') && this.password) {
-    this.password = await bcrypt.hash(
-      this.password,
+  if (this.isModified('password') && this.get('password')) {
+    const hash = await bcrypt.hash(
+      this.get('password') as string,
       Number(config.bcrypt_salt_rounds)
     );
+    this.set('password', hash);
   }
   next();
 });
@@ -307,9 +208,8 @@ userSchema.statics.removeDeviceToken = async (
 
 // Create indexes
 userSchema.index({ role: 1, accountState: 1, _id: -1 });
-userSchema.index({ accountState: 1, appState: 1 });
+userSchema.index({ accountState: 1 });
 userSchema.index({ lockUntil: 1 });
-userSchema.index({ serviceAreaId: 1 });
 userSchema.index({ name: 'text', nickname: 'text', phone: 'text' });
 
 export const User = model<IUser, UserModal>('User', userSchema);

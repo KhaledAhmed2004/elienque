@@ -4,11 +4,11 @@ import { z } from 'zod';
 export const createStripeAccountZodSchema = z.object({
   body: z.object({
     userId: z.number({
-      required_error: 'User ID is required',
+      error: 'User ID is required',
     }).positive('User ID must be positive'),
     accountType: z.enum(['client', 'freelancer'], {
-      required_error: 'Account type is required',
-      invalid_type_error: 'Account type must be either client or freelancer',
+      error: 'Account type is required',
+      
     }),
   }),
 });
@@ -17,16 +17,16 @@ export const createStripeAccountZodSchema = z.object({
 export const createEscrowPaymentZodSchema = z.object({
   body: z.object({
     bidId: z.number({
-      required_error: 'Bid ID is required',
+      error: 'Bid ID is required',
     }).positive('Bid ID must be positive'),
     amount: z.number({
-      required_error: 'Amount is required',
+      error: 'Amount is required',
     }).positive('Amount must be greater than 0').max(100000, 'Amount cannot exceed $100,000'),
     clientId: z.number({
-      required_error: 'Client ID is required',
+      error: 'Client ID is required',
     }).positive('Client ID must be positive'),
     freelancerId: z.number({
-      required_error: 'Freelancer ID is required',
+      error: 'Freelancer ID is required',
     }).positive('Freelancer ID must be positive'),
   }),
 });
@@ -35,7 +35,7 @@ export const createEscrowPaymentZodSchema = z.object({
 export const releasePaymentZodSchema = z.object({
   params: z.object({
     paymentId: z.string({
-      required_error: 'Payment ID is required',
+      error: 'Payment ID is required',
     }).regex(/^\d+$/, 'Payment ID must be a valid number'),
   }),
   body: z.object({
@@ -48,7 +48,7 @@ export const releasePaymentZodSchema = z.object({
 export const refundPaymentZodSchema = z.object({
   params: z.object({
     paymentId: z.string({
-      required_error: 'Payment ID is required',
+      error: 'Payment ID is required',
     }).regex(/^\d+$/, 'Payment ID must be a valid number'),
   }),
   body: z.object({
@@ -60,7 +60,7 @@ export const refundPaymentZodSchema = z.object({
 export const getPaymentByIdZodSchema = z.object({
   params: z.object({
     paymentId: z.string({
-      required_error: 'Payment ID is required',
+      error: 'Payment ID is required',
     }).regex(/^\d+$/, 'Payment ID must be a valid number'),
   }),
 });
@@ -69,13 +69,12 @@ export const getPaymentByIdZodSchema = z.object({
 export const getUserPaymentsZodSchema = z.object({
   params: z.object({
     userId: z.string({
-      required_error: 'User ID is required',
+      error: 'User ID is required',
     }).regex(/^\d+$/, 'User ID must be a valid number'),
   }),
   query: z.object({
     userType: z.enum(['client', 'freelancer'], {
-      required_error: 'User type is required',
-      invalid_type_error: 'User type must be either client or freelancer',
+      error: "Invalid value",
     }),
     page: z.string().regex(/^\d+$/, 'Page must be a valid number').optional(),
     limit: z.string().regex(/^\d+$/, 'Limit must be a valid number').optional(),
@@ -111,13 +110,12 @@ export const getPaymentStatsZodSchema = z.object({
 export const getUserPaymentStatsZodSchema = z.object({
   params: z.object({
     userId: z.string({
-      required_error: 'User ID is required',
+      error: 'User ID is required',
     }).regex(/^\d+$/, 'User ID must be a valid number'),
   }),
   query: z.object({
     userType: z.enum(['client', 'freelancer'], {
-      required_error: 'User type is required',
-      invalid_type_error: 'User type must be either client or freelancer',
+      error: "Invalid value",
     }),
     dateFrom: z.string().datetime('Invalid date format for dateFrom').optional(),
     dateTo: z.string().datetime('Invalid date format for dateTo').optional(),
@@ -128,7 +126,7 @@ export const getUserPaymentStatsZodSchema = z.object({
 export const getOnboardingLinkZodSchema = z.object({
   params: z.object({
     userId: z.string({
-      required_error: 'User ID is required',
+      error: 'User ID is required',
     }).regex(/^\d+$/, 'User ID must be a valid number'),
   }),
 });
@@ -137,7 +135,7 @@ export const getOnboardingLinkZodSchema = z.object({
 export const checkOnboardingStatusZodSchema = z.object({
   params: z.object({
     userId: z.string({
-      required_error: 'User ID is required',
+      error: 'User ID is required',
     }).regex(/^\d+$/, 'User ID must be a valid number'),
   }),
 });
@@ -145,9 +143,7 @@ export const checkOnboardingStatusZodSchema = z.object({
 // Webhook validation (minimal since Stripe handles most validation)
 export const webhookZodSchema = z.object({
   headers: z.object({
-    'stripe-signature': z.string({
-      required_error: 'Stripe signature is required',
-    }),
+    'stripe-signature': z.string().min(1, 'Stripe signature is required'),
   }),
 });
 

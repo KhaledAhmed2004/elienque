@@ -58,20 +58,8 @@ const socket = (io: Server) => {
       );
       logEvent('socket_connected', `for user_id: ${userId}`);
 
-      // Auto-join community room based on user's service area (from JWT payload or Database lookup)
-      let serviceArea = payload?.serviceArea as string | undefined;
-      if (!serviceArea) {
-        const userDoc = await User.findById(userId).select('serviceArea').lean();
-        serviceArea = userDoc?.serviceArea;
-      }
-      if (serviceArea) {
-        socket.join(COMMUNITY_ROOM(serviceArea));
-        logger.info(
-          colors.blue(
-            `✅ User ${userId} joined ${COMMUNITY_ROOM(serviceArea)}`,
-          ),
-        );
-      }
+      // Auto-join community room based on user's service area has been removed
+      // (Legacy serviceArea field was removed in Slice 1)
 
       // STEP 3 — Handle Chat Room Join / Leave Events
 
@@ -110,13 +98,9 @@ const socket = (io: Server) => {
         );
       });
 
-      // Community Room Explicit Join / Leave Events
       socket.on('JOIN_COMMUNITY', async (data: unknown) => {
         let area = (data as any)?.serviceArea;
-        if (!area) {
-          const userDoc = await User.findById(userId).select('serviceArea').lean();
-          area = userDoc?.serviceArea;
-        }
+        // Legacy: if client doesn't send area, we no longer fallback to userDoc.serviceArea
         if (area && typeof area === 'string') {
           socket.join(COMMUNITY_ROOM(area));
           logEvent('JOIN_COMMUNITY', `for service_area: ${area}`);

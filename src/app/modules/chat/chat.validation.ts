@@ -3,7 +3,7 @@ import { z } from 'zod';
 const createChatZodSchema = z.object({
   body: z.object({
     participantId: z
-      .string({ required_error: 'Participant ID is required' })
+      .string({ error: 'Participant ID is required' })
       .min(1, { message: 'Participant ID is required' }),
     itemId: z.string().min(1).optional(),
     jobId: z.string().min(1).optional(),
@@ -14,7 +14,7 @@ const createChatZodSchema = z.object({
 const getChatByIdZodSchema = z.object({
   params: z.object({
     chatId: z
-      .string({ required_error: 'Chat ID is required' })
+      .string({ error: 'Chat ID is required' })
       .min(1, { message: 'Chat ID is required' }),
   }),
 });
@@ -22,7 +22,7 @@ const getChatByIdZodSchema = z.object({
 const deleteChatZodSchema = z.object({
   params: z.object({
     chatId: z
-      .string({ required_error: 'Chat ID is required' })
+      .string({ error: 'Chat ID is required' })
       .min(1, { message: 'Chat ID is required' }),
   }),
 });

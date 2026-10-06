@@ -45,16 +45,10 @@ export enum SESSION_STATUS {
   INVALIDATED = 'INVALIDATED',
 }
 
-export enum COMPANY_ROLE {
-  COMPANY_MANAGER = 'Company Manager',
-  OWNER = 'Owner',
-  OPERATOR = 'Operator',
-  CHAUFFEUR = 'Chauffeur',
-}
-
 export enum USER_ROLES {
   ADMIN = 'ADMIN',
-  USER = 'USER',
+  PROMOTER = 'PROMOTER',
+  BUSINESS_OWNER = 'BUSINESS_OWNER',
 }
 
 export enum CARD_PAYMENT_STATUS {

@@ -5,7 +5,7 @@ This repository contains project-level rules, workflows, and skills under `.agen
 ## Workflows & Audits
 
 - **Code Audit & Refactoring**:
-  Whenever the user asks to review, audit, or refactor any existing module, feature, or code, **always follow the 9-phase workflow** in [`.agents/workflows/code-audit.md`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/moeb26/.agents/workflows/code-audit.md).
+  Whenever the user asks to review, audit, or refactor any existing module, feature, or code, **always follow the 9-phase workflow** in [`.agents/workflows/code-audit.md`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/elineuque/.agents/workflows/code-audit.md).
   - Stop at all **3 Hard Gates** (Gate 1: Scope, Gate 2: Findings, Gate 3: Plan Approval).
   - No code changes are permitted before explicit Gate 3 approval.
   - **Audit Evidence & Output Contract (Mandatory Protocol)**:
@@ -20,12 +20,12 @@ This repository contains project-level rules, workflows, and skills under `.agen
     - *Strict Terminology*: Use exact workflow labels (`QUERY_BUILDER`, `CONFIRMED_BUG`, etc.). Never invent ad-hoc variants.
 
 - **Modular PRD & BDD Generation**:
-  Whenever the user asks to write, generate, or document a module's PRD or requirements, **follow the 5-phase specialist workflow** in [`.agents/workflows/modular-prd.md`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/moeb26/.agents/workflows/modular-prd.md) using the [`modular-prd-generator`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/moeb26/.agents/skills/modular-prd-generator/SKILL.md) skill, `grill-with-docs`, and the [`plain-docs`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/moeb26/.agents/skills/plain-docs/SKILL.md) clarity standard.
+  Whenever the user asks to write, generate, or document a module's PRD or requirements, **follow the 5-phase specialist workflow** in [`.agents/workflows/modular-prd.md`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/elineuque/.agents/workflows/modular-prd.md) using the [`modular-prd-generator`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/elineuque/.agents/skills/modular-prd-generator/SKILL.md) skill, `grill-with-docs`, and the [`plain-docs`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/elineuque/.agents/skills/plain-docs/SKILL.md) clarity standard.
   - Stop at all **3 Hard Gates** (Gate 1: Scope & Baseline, Gate 2: Domain Mapping & Unresolved Decisions, Gate 3: Final PRD & CONTEXT.md Sign-off).
   - Always enforce **Plain Language & Zero-Jargon**: Use simple, crisp English that any junior developer or non-tech stakeholder can understand in 30 seconds.
 
 - **New Feature Implementation**:
-  Whenever the user asks to implement, build, or develop a new feature or module, **always follow the Controlled Engineering Decision Pipeline (CEDP)** in [`.agents/workflows/feature-implementation.md`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/moeb26/.agents/workflows/feature-implementation.md).
+  Whenever the user asks to implement, build, or develop a new feature or module, **always follow the Controlled Engineering Decision Pipeline (CEDP)** in [`.agents/workflows/feature-implementation.md`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/elineuque/.agents/workflows/feature-implementation.md).
   - Classify feature into Risk Tiers (**L0–L4 × S0–S3**) before execution.
   - Stop at all **3 Evidence-Enforced Hard Gates** (Gate 1: Domain & Architecture Assurance, Gate 2: Contract & Adversarial Test Assurance, Gate 3: Automated Verification vs Business Acceptance).
   - Never write implementation code before Gate 1 approval.
@@ -39,7 +39,11 @@ This repository contains project-level rules, workflows, and skills under `.agen
   - If a **P0 or P1** is discovered during implementation, STOP immediately, reopen the affected gate, resolve the finding, and re-present the dossier before resuming.
 
 ## Active Rules
-- Additional architecture, API design, and workflow rules are located in [`.agents/rules/`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/moeb26/.agents/rules/).
+- Additional architecture, API design, and workflow rules are located in [`.agents/rules/`](file:///c:/Users/Khaled/Khaled%20Dask/Backend/elineuque/.agents/rules/).
 
 
 
+
+## Context files
+- [src/app/modules/user/AGENTS.md](src/app/modules/user/AGENTS.md): Manages user profiles, chauffeur approvals, and role-based logic.
+- [src/app/modules/campaign/AGENTS.md](src/app/modules/campaign/AGENTS.md): Manages campaign creation, lifecycle, and promoter participation.

@@ -16,7 +16,7 @@ import app from '../../../../app';
 import { Chat } from '../chat.model';
 import { Message } from '../../message/message.model';
 import { User } from '../../user/user.model';
-import { USER_ROLES, COMPANY_ROLE } from '../../../../enums/user';
+import { USER_ROLES } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
 import config from '../../../../config';
 import { StatusCodes } from 'http-status-codes';
@@ -75,7 +75,7 @@ const assertSuccessResponse = (body: any) => {
 const createTestUserAndToken = async (
   name: string,
   role: string,
-  companyRole: string,
+  
   email: string,
   accountState = 'VERIFIED',
 ) => {
@@ -87,7 +87,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     accountState,
   });
 
@@ -109,8 +109,8 @@ beforeAll(async () => {
 
   const u1 = await createTestUserAndToken(
     'Alice Chauffeur',
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'chat-user1@test.com',
   );
   user1AccessToken = u1.token;
@@ -118,8 +118,8 @@ beforeAll(async () => {
 
   const u2 = await createTestUserAndToken(
     'Bob Driver',
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'chat-user2@test.com',
   );
   user2AccessToken = u2.token;
@@ -127,8 +127,8 @@ beforeAll(async () => {
 
   const outsider = await createTestUserAndToken(
     'Outsider Attacker',
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'chat-outsider@test.com',
   );
   outsiderAccessToken = outsider.token;
@@ -136,8 +136,8 @@ beforeAll(async () => {
 
   const suspended = await createTestUserAndToken(
     'Suspended BadUser',
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'chat-suspended@test.com',
     'SUSPENDED',
   );

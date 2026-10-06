@@ -9,28 +9,28 @@ const router = express.Router();
 
 router.get(
   '/',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(NotificationValidation.listNotificationsSchema),
   NotificationController.listMyNotifications
 );
 
 router.patch(
   '/:notificationId/read',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(NotificationValidation.markReadSchema),
   NotificationController.markRead
 );
 
 router.patch(
   '/read-all',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(NotificationValidation.markAllReadSchema),
   NotificationController.markAllRead
 );
 
 router.delete(
   '/:notificationId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(NotificationValidation.paramIdSchema),
   NotificationController.deleteNotification
 );

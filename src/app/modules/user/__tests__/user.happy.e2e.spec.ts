@@ -17,7 +17,7 @@ import { User } from '../user.model';
 import { Job } from '../../job/job.model';
 import { JOB_TYPE, PAYMENT_TYPE, JOB_STATUS } from '../../job/job.interface';
 import { Vehicle } from '../../vehicle/vehicle.model';
-import { USER_ROLES, COMPANY_ROLE, ACCOUNT_STATE, APP_STATE, VEHICLE_STATUS } from '../../../../enums/user';
+import { USER_ROLES, , ACCOUNT_STATE, APP_STATE, VEHICLE_STATUS } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
 import config from '../../../../config';
 import { StatusCodes } from 'http-status-codes';
@@ -80,7 +80,7 @@ const assertSuccessResponse = (body: any) => {
 
 const createTestUserAndToken = async (
   role: string,
-  companyRole: string,
+  
   email: string,
   overrides: Record<string, any> = {},
 ) => {
@@ -92,7 +92,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     accountState: ACCOUNT_STATE.VERIFIED,
     appState: APP_STATE.ACTIVE,
     isOnboard: true,
@@ -128,15 +128,15 @@ beforeAll(async () => {
 
   const adminData = await createTestUserAndToken(
     USER_ROLES.ADMIN,
-    COMPANY_ROLE.OWNER,
+    
     'admin-user-happy@test.com',
   );
   adminAccessToken = adminData.token;
   adminId = adminData.userId;
 
   const u1Data = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'chauffeur-one@test.com',
     { name: 'John Doe', nickname: 'Johnny', serviceArea: 'New York City' },
   );
@@ -144,8 +144,8 @@ beforeAll(async () => {
   user1Id = u1Data.userId;
 
   const u2Data = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'chauffeur-two@test.com',
     { name: 'Jane Smith', nickname: 'Janie', serviceArea: 'Los Angeles' },
   );
@@ -767,8 +767,8 @@ ${bdd.keyword('Then')} I receive HTTP 200 OK with populated vehicle details and 
     beforeEach(async () => {
       const uniqueSuffix = Math.floor(100000 + Math.random() * 900000);
       const pendingData = await createTestUserAndToken(
-        USER_ROLES.USER,
-        COMPANY_ROLE.CHAUFFEUR,
+        USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+        
         `pending-${uniqueSuffix}@test.com`,
         { appState: APP_STATE.PENDING, accountState: ACCOUNT_STATE.UNVERIFIED, isOnboard: false },
       );
@@ -1034,8 +1034,8 @@ ${bdd.keyword('And')} the user record is de-identified and marked 'DEACTIVATED' 
 `);
 
       const tempUser = await createTestUserAndToken(
-        USER_ROLES.USER,
-        COMPANY_ROLE.CHAUFFEUR,
+        USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+        
         'delete-me-happy@test.com',
       );
 
@@ -1088,8 +1088,8 @@ ${bdd.keyword('And')} user document is permanently purged from MongoDB (null doc
 `);
 
       const targetUser = await createTestUserAndToken(
-        USER_ROLES.USER,
-        COMPANY_ROLE.CHAUFFEUR,
+        USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+        
         'admin-delete-target@test.com',
       );
 

@@ -14,7 +14,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import app from '../../../../app';
 import { Notification } from '../notification.model';
 import { User } from '../../user/user.model';
-import { USER_ROLES, COMPANY_ROLE } from '../../../../enums/user';
+import { USER_ROLES } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
 import config from '../../../../config';
 import { StatusCodes } from 'http-status-codes';
@@ -67,7 +67,7 @@ const assertErrorResponse = (body: any, expectedMessageSubstring?: string) => {
 
 const createTestUserAndToken = async (
   role: string,
-  companyRole: string,
+  
   email: string,
   name: string,
 ) => {
@@ -79,7 +79,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     accountState: 'VERIFIED',
     profilePicture: 'https://example.com/avatar.png',
   });
@@ -100,8 +100,8 @@ beforeAll(async () => {
   await Notification.deleteMany({});
 
   const user = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.OWNER,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'alice-notif-security@test.com',
     'Alice Security',
   );
@@ -109,8 +109,8 @@ beforeAll(async () => {
   userToken = user.token;
 
   const otherUser = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'bob-notif-security@test.com',
     'Bob Attacker',
   );
@@ -119,7 +119,7 @@ beforeAll(async () => {
 
   const admin = await createTestUserAndToken(
     USER_ROLES.ADMIN,
-    COMPANY_ROLE.OWNER,
+    
     'admin-notif-security@test.com',
     'Admin Security',
   );

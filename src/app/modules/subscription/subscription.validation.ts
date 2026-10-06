@@ -29,9 +29,7 @@ export const SubscriptionValidation = {
   verifyAppleSchema: z
     .object({
       body: z.object({
-        receipt: z
-          .string({ required_error: 'Receipt data is required' })
-          .min(1, 'Receipt data cannot be empty'),
+        receipt: z.string().min(1, 'Receipt data is required'),
       }),
     })
     .describe('VerifyAppleReceiptSchema'),
@@ -39,12 +37,8 @@ export const SubscriptionValidation = {
   verifyGoogleSchema: z
     .object({
       body: z.object({
-        purchaseToken: z
-          .string({ required_error: 'purchaseToken is required' })
-          .min(1, 'purchaseToken cannot be empty'),
-        productId: z
-          .string({ required_error: 'productId is required' })
-          .min(1, 'productId cannot be empty'),
+        purchaseToken: z.string().min(1, 'purchaseToken is required'),
+        productId: z.string().min(1, 'productId is required'),
         orderId: z.string().optional().default(''),
       }),
     })

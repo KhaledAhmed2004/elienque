@@ -65,14 +65,6 @@ const registerUser = async (payload: IRegisterUserReq) => {
     }
   }
 
-  if (payload.serviceAreaId) {
-    const serviceArea = await ServiceArea.findById(payload.serviceAreaId);
-    const isInvalidServiceArea = !serviceArea || serviceArea.status !== 'ACTIVE';
-    if (isInvalidServiceArea) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid or inactive service area');
-    }
-  }
-
   const session = await mongoose.startSession();
 
   let registeredUserId: mongoose.Types.ObjectId | undefined;
@@ -91,12 +83,6 @@ const registerUser = async (payload: IRegisterUserReq) => {
         purpose: 'REGISTRATION' as const,
       };
 
-      const initialAppState =
-        payload.role === USER_ROLES.PROMOTER ||
-        payload.role === USER_ROLES.BUSINESS_OWNER
-          ? APP_STATE.ACTIVE
-          : APP_STATE.PENDING;
-
       const [user] = await User.create(
         [
           {
@@ -104,9 +90,7 @@ const registerUser = async (payload: IRegisterUserReq) => {
             email,
             phone,
             role: payload.role,
-            appState: initialAppState,
             accountState: ACCOUNT_STATE.UNVERIFIED,
-            isOnboard: true,
             authentication: registrationAuthSession,
           },
         ],
@@ -186,9 +170,7 @@ const claimAdmin = async (user: JwtUser, payload: IClaimAdminReq) => {
     {
       email,
       password: hashPassword,
-      mustChangePassword: false,
       accountState: ACCOUNT_STATE.VERIFIED,
-      appState: APP_STATE.ACTIVE,
     },
     { new: true },
   );
@@ -204,7 +186,6 @@ const claimAdmin = async (user: JwtUser, payload: IClaimAdminReq) => {
     user: {
       id: updatedAdmin._id,
       email: updatedAdmin.email,
-      mustChangePassword: false,
     },
   };
 };
@@ -212,33 +193,22 @@ const claimAdmin = async (user: JwtUser, payload: IClaimAdminReq) => {
 const handleRegistrationTokenGeneration = (
   user: IUser & { _id: mongoose.Types.ObjectId },
 ) => {
-  const isApproved =
-    user.role === USER_ROLES.PROMOTER ||
-    user.role === USER_ROLES.BUSINESS_OWNER ||
-    user.appState === APP_STATE.ACTIVE;
-
-  const currentAppState = isApproved ? APP_STATE.ACTIVE : APP_STATE.PENDING;
+  const isApproved = true;
 
   const { accessToken, refreshToken } = generateUserTokens({
     _id: user._id,
     role: user.role,
     email: user.email,
-    appState: currentAppState,
     accountState: ACCOUNT_STATE.VERIFIED,
-    serviceAreaId: user.serviceAreaId,
-    serviceArea: user.serviceArea,
   });
 
   return {
-    message: isApproved
-      ? 'Email verified successfully.'
-      : 'Email verified successfully. Please wait for admin approval to access the app.',
+    message: 'Email verified successfully.',
     tokens: { accessToken, refreshToken },
     data: {
       accessToken,
       refreshToken,
       accountState: ACCOUNT_STATE.VERIFIED,
-      appState: currentAppState,
       isApproved,
     },
   };
@@ -361,12 +331,6 @@ const verifyOtp = async (payload: IVerifyOtpReq) => {
         ...(storedPurpose === 'REGISTRATION'
           ? {
               accountState: ACCOUNT_STATE.VERIFIED,
-              isOnboard: true,
-              appState:
-                isExistUser.role === USER_ROLES.PROMOTER ||
-                isExistUser.role === USER_ROLES.BUSINESS_OWNER
-                  ? APP_STATE.ACTIVE
-                  : APP_STATE.PENDING,
             }
           : {
               'authentication.isResetPassword': true,
@@ -591,7 +555,6 @@ const resetPassword = async (token: string, payload: IResetPasswordReq) => {
     { _id: consumedToken.user },
     {
       password: hashPassword,
-      mustChangePassword: false,
       $set: { 'authentication.isResetPassword': false },
     },
   );
@@ -626,7 +589,7 @@ const changePassword = async (user: JwtPayload, payload: IChangePasswordReq) => 
 
   await User.findOneAndUpdate(
     { _id: user.id },
-    { password: hashPassword, mustChangePassword: false },
+    { password: hashPassword },
     { new: true },
   );
 };
@@ -728,7 +691,6 @@ const loginUser = async (payload: ILoginReq & { deviceToken?: string }) => {
   const responseData: Record<string, any> = {
     accessToken,
     accountState: isExistUser.accountState,
-    appState: isExistUser.appState,
     ...(isExistUser.rejectionReason && {
       rejectionReason: isExistUser.rejectionReason,
     }),
@@ -738,18 +700,11 @@ const loginUser = async (payload: ILoginReq & { deviceToken?: string }) => {
     }),
   };
 
-  // mustChangePassword is only relevant for ADMIN accounts or users provisioned by admin with a temporary one-time password
-  if (isExistUser.role === USER_ROLES.ADMIN || isExistUser.mustChangePassword) {
-    responseData.mustChangePassword = Boolean(isExistUser.mustChangePassword);
-  }
-
   return {
     tokens: { accessToken, refreshToken },
     data: responseData,
-    isOnboard,
-    isApproved,
-    appState: isExistUser.appState,
-    mustChangePassword: Boolean(isExistUser.mustChangePassword),
+    isOnboard: true,
+    isApproved: true,
     ...(isSuspended && {
       isRestricted: true as const,
       blockReason: isExistUser.blockReason ?? null,
@@ -825,19 +780,15 @@ const getMyStatus = async (userId: string) => {
   if (!user) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
-  const { isApproved, isOnboard } = computeUserAccessState(user);
+  const { isApproved } = computeUserAccessState(user);
   return {
     name: user.name,
     email: user.email,
     role: user.role,
-    appState: user.appState,
     accountState: user.accountState,
-    isOnboard,
-    isActive: user.appState === APP_STATE.ACTIVE,
     isApproved,
     rejectionReason: user.rejectionReason ?? null,
     blockReason: user.blockReason ?? null,
-    serviceAreaId: user.serviceAreaId,
   };
 };
 

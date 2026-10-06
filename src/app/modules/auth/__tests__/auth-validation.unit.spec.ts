@@ -12,7 +12,7 @@ describe('Authentication & Registration Validation Unit Tests (BDD Scenarios)', 
         password: 'SecurePassword123!',
         company: 'Doe Transport LLC',
         companyName: 'Doe Transport LLC',
-        companyRole: 'Chauffeur',
+        
         serviceArea: 'New York',
         serviceAreaId: '654321654321654321654321',
         vehicles: [

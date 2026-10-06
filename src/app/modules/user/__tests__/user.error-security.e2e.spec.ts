@@ -14,7 +14,7 @@ import chalk from 'chalk';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import app from '../../../../app';
 import { User } from '../user.model';
-import { USER_ROLES, COMPANY_ROLE, ACCOUNT_STATE, APP_STATE } from '../../../../enums/user';
+import { USER_ROLES, , ACCOUNT_STATE, APP_STATE } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
 import config from '../../../../config';
 import { StatusCodes } from 'http-status-codes';
@@ -69,7 +69,7 @@ const assertErrorResponse = (body: any) => {
 
 const createTestUserAndToken = async (
   role: string,
-  companyRole: string,
+  
   email: string,
   overrides: Record<string, any> = {},
 ) => {
@@ -81,7 +81,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     accountState: ACCOUNT_STATE.VERIFIED,
     appState: APP_STATE.ACTIVE,
     isOnboard: true,
@@ -114,16 +114,16 @@ beforeAll(async () => {
   await User.deleteMany({});
 
   const uData = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'security-user@test.com',
   );
   regularUserToken = uData.token;
   regularUserId = uData.userId;
 
   const sData = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'suspended-user@test.com',
     { accountState: ACCOUNT_STATE.SUSPENDED, blockReason: 'Policy violation' },
   );

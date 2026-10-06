@@ -36,8 +36,8 @@ const verifyOtp = catchAsync(async (req: Request, res: Response) => {
   let responseData: any = result.data;
 
   // Set refresh token in httpOnly cookie for better security if tokens exist
-  if (typeof result.data !== 'string' && result.data?.tokens) {
-    res.cookie('refreshToken', result.data.tokens.refreshToken, {
+  if (typeof result.data !== 'string' && result.tokens) {
+    res.cookie('refreshToken', result.tokens.refreshToken, {
       httpOnly: true,
       secure: config.node_env === 'production',
       sameSite: 'lax' as const,
@@ -45,8 +45,7 @@ const verifyOtp = catchAsync(async (req: Request, res: Response) => {
     });
 
     responseData = {
-      accessToken: result.data.tokens.accessToken,
-      isOnboard: result.data.isOnboard,
+      accessToken: result.tokens.accessToken,
       isApproved: result.data.isApproved ?? false,
     };
   }
@@ -90,10 +89,7 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     message: 'User logged in successfully.',
     data: {
       accessToken: result.tokens.accessToken,
-      isOnboard: result.isOnboard,
       isApproved: result.isApproved,
-      appState: result.appState,
-      mustChangePassword: result.mustChangePassword,
       ...(result.rejectionReason ? { rejectionReason: result.rejectionReason } : {}),
       ...(result.isRestricted
         ? { isRestricted: true, blockReason: result.blockReason }

@@ -11,61 +11,38 @@ const router = express.Router();
 
 router.get(
   '/profile',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   UserController.getUserProfile,
 );
 
 router.patch(
   '/profile',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
-  fileHandler([
-    { name: 'profilePicture', maxCount: 1 },
-    { name: 'drivingLicenseImage', maxCount: 1 },
-    { name: 'hackLicenseImage', maxCount: 1 },
-    { name: 'localPermitImage', maxCount: 1 },
-  ]),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
+  fileHandler([{ name: 'profilePicture', maxCount: 1 }]),
   validateRequest(UserValidation.updateUserZodSchema),
   UserController.updateProfile,
 );
 
 router.delete(
   '/delete-account',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   validateRequest(UserValidation.deleteUserZodSchema),
   UserController.deleteAccount,
 );
 
-router.get('/my-reviews', auth(USER_ROLES.USER), UserController.getMyReviews);
-
 router.get(
-  '/favorites',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
-  UserController.getFavoriteChauffeurs,
-);
-
-router.post(
-  '/favorites/:chauffeurId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
-  UserController.addFavoriteChauffeur,
-);
-
-router.delete(
-  '/favorites/:chauffeurId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
-  UserController.removeFavoriteChauffeur,
+  '/my-reviews',
+  auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
+  UserController.getMyReviews,
 );
 
 router.get(
   '/chauffeurs',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   UserController.searchChauffeurs,
 );
 
-router.get(
-  '/stats',
-  auth(USER_ROLES.ADMIN),
-  UserController.getUserStats,
-);
+router.get('/stats', auth(USER_ROLES.ADMIN), UserController.getUserStats);
 
 router.get('/', auth(USER_ROLES.ADMIN), UserController.getAllUserRoles);
 
@@ -111,7 +88,7 @@ router.patch(
 
 router.get(
   '/:userId/reviews',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   rateLimitMiddleware({
     windowMs: 60_000,
     max: 60,
@@ -122,7 +99,7 @@ router.get(
 
 router.get(
   '/:userId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
   rateLimitMiddleware({
     windowMs: 60_000,
     max: 60,

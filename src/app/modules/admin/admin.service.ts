@@ -30,7 +30,7 @@ const getAdminDashboardStats = async (): Promise<IAdminDashboardStats> => {
       }),
 
       new AnalyticsHelper<IUser>(User).calculateGrowth({
-        filter: { role: USER_ROLES.USER, appState: APP_STATE.PENDING },
+        filter: { role: USER_ROLES.PROMOTER },
         period: 'month',
       }),
       new AnalyticsHelper<IJob>(Job).calculateGrowth({
@@ -124,8 +124,6 @@ interface IRawRecentUser {
   name?: string;
   email?: string;
   role?: string;
-  companyRole?: string;
-  appState?: string;
   createdAt?: Date | string;
 }
 
@@ -162,7 +160,7 @@ const getRecentActivities = async (limit: number = 5): Promise<IRecentActivity[]
     User.find()
       .sort({ createdAt: -1 })
       .limit(safeLimit)
-      .select('_id name email role companyRole appState createdAt')
+      .select('_id name email role createdAt')
       .lean<IRawRecentUser[]>(),
     Job.find()
       .sort({ createdAt: -1 })
@@ -187,36 +185,18 @@ const getRecentActivities = async (limit: number = 5): Promise<IRecentActivity[]
   for (const u of recentUsers) {
     if (u.createdAt) {
       const userIdStr = u._id ? u._id.toString() : '';
-      if (u.appState === APP_STATE.PENDING) {
-        activities.push({
-          id: userIdStr,
-          type: 'USER_PENDING',
-          title: 'User approval pending',
-          description: `${u.name || 'New applicant'} submitted documents for user verification`,
-          timestamp: new Date(u.createdAt),
-          metadata: {
-            userId: userIdStr,
-            email: u.email,
-            role: u.role,
-            companyRole: u.companyRole,
-            appState: u.appState,
-          },
-        });
-      } else {
-        activities.push({
-          id: userIdStr,
-          type: 'USER_REGISTERED',
-          title: 'New user registered',
-          description: `${u.name || 'A new user'} joined the platform`,
-          timestamp: new Date(u.createdAt),
-          metadata: {
-            userId: userIdStr,
-            email: u.email,
-            role: u.role,
-            companyRole: u.companyRole,
-          },
-        });
-      }
+      activities.push({
+        id: userIdStr,
+        type: 'USER_REGISTERED',
+        title: 'New user registered',
+        description: `${u.name || 'A new user'} joined the platform`,
+        timestamp: new Date(u.createdAt),
+        metadata: {
+          userId: userIdStr,
+          email: u.email,
+          role: u.role,
+        },
+      });
     }
   }
 

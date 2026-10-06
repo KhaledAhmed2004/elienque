@@ -6,7 +6,6 @@ export type JwtUser = {
   id: string;
   email: string;
   role: USER_ROLES;
-  appState?: APP_STATE;
   accountState?: ACCOUNT_STATE;
   serviceAreaId?: string;
 } & JwtPayload;

@@ -14,7 +14,7 @@ import app from '../../../../app';
 import { User } from '../../user/user.model';
 import {
   USER_ROLES,
-  COMPANY_ROLE,
+
   APP_STATE,
 } from '../../../../enums/user';
 import { jwtHelper } from '../../../../helpers/jwtHelper';
@@ -66,7 +66,7 @@ const assertErrorResponse = (body: any) => {
 
 const createTestUserAndToken = async (
   role: string,
-  companyRole: string,
+  
   email: string,
 ) => {
   const newUserId = new mongoose.Types.ObjectId().toString();
@@ -77,7 +77,7 @@ const createTestUserAndToken = async (
     password: 'Password123!',
     phone: `+${Math.floor(1000000000 + Math.random() * 9000000000)}`,
     role,
-    companyRole,
+    
     accountState: 'VERIFIED',
     appState: APP_STATE.ACTIVE,
   });
@@ -109,14 +109,14 @@ beforeAll(async () => {
 
   const admin = await createTestUserAndToken(
     USER_ROLES.ADMIN,
-    COMPANY_ROLE.OWNER,
+    
     'admin-sec@test.com',
   );
   adminAccessToken = admin.token;
 
   const normalUser = await createTestUserAndToken(
-    USER_ROLES.USER,
-    COMPANY_ROLE.CHAUFFEUR,
+    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    
     'user-sec@test.com',
   );
   userAccessToken = normalUser.token;

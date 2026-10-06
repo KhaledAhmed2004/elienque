@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { COMPANY_ROLE } from '../../../enums/user';
+
 
 const phoneRegex = /^\+?[0-9]{7,15}$/;
 const passwordRegex =
@@ -8,29 +8,20 @@ const passwordRegex =
 // 2.1 Register Schema
 const registerUserZodSchema = z.object({
   body: z.object({
-    name: z.string({ required_error: 'Name is required' }).min(1),
+    name: z.string({ error: 'Name is required' }).min(1),
     email: z
-      .string({ required_error: 'Email is required' })
+      .string({ error: 'Email is required' })
       .email('Invalid email address'),
     password: z
-      .string({ required_error: 'Password is required' })
+      .string({ error: 'Password is required' })
       .regex(
         passwordRegex,
         'Password must include upper, lower, number, special and be 8+ chars',
       )
       .max(128, 'Password cannot exceed 128 characters'),
     phone: z
-      .string({ required_error: 'Phone is required' })
+      .string({ error: 'Phone is required' })
       .regex(phoneRegex, 'Phone must be 7-15 digits, optional +'),
-    serviceAreaId: z
-      .string({ required_error: 'Service area ID is required' })
-      .min(1),
-    companyName: z
-      .string({ required_error: 'Company name is required' })
-      .min(1),
-    companyRole: z.enum(Object.values(COMPANY_ROLE) as [string, ...string[]], {
-      required_error: 'Company role is required',
-    }),
   }),
 });
 
@@ -38,9 +29,9 @@ const registerUserZodSchema = z.object({
 const verifyOtpSchema = z.object({
   body: z.object({
     email: z
-      .string({ required_error: 'Email is required' })
+      .string({ error: 'Email is required' })
       .email('Invalid email address'),
-    oneTimeCode: z.number({ required_error: 'One time code is required' }),
+    oneTimeCode: z.number({ error: 'One time code is required' }),
   }),
 });
 
@@ -48,7 +39,7 @@ const verifyOtpSchema = z.object({
 const resendOtpSchema = z.object({
   body: z.object({
     email: z
-      .string({ required_error: 'Email is required' })
+      .string({ error: 'Email is required' })
       .email('Invalid email address'),
   }),
 });
@@ -56,9 +47,9 @@ const resendOtpSchema = z.object({
 // 2.4 Login
 const loginSchema = z.object({
   body: z.object({
-    email: z.string({ required_error: 'Email is required' }),
+    email: z.string({ error: 'Email is required' }),
     password: z
-      .string({ required_error: 'Password is required' })
+      .string({ error: 'Password is required' })
       .min(1, 'Password is required'),
   }),
 });
@@ -77,16 +68,16 @@ const refreshTokenSchema = z.object({
 const forgetPasswordSchema = z.object({
   body: z.object({
     email: z
-      .string({ required_error: 'Email is required' })
+      .string({ error: 'Email is required' })
       .email('Invalid email address'),
   }),
 });
 
 const resetPasswordSchema = z.object({
   body: z.object({
-    newPassword: z.string({ required_error: 'Password is required' }),
+    newPassword: z.string({ error: 'Password is required' }),
     confirmPassword: z.string({
-      required_error: 'Confirm Password is required',
+      error: 'Confirm Password is required',
     }),
   }),
 });
@@ -94,9 +85,9 @@ const resetPasswordSchema = z.object({
 const changePasswordSchema = z.object({
   body: z.object({
     currentPassword: z.string().optional(),
-    newPassword: z.string({ required_error: 'New Password is required' }),
+    newPassword: z.string({ error: 'New Password is required' }),
     confirmPassword: z.string({
-      required_error: 'Confirm Password is required',
+      error: 'Confirm Password is required',
     }),
   }),
 });
@@ -104,20 +95,20 @@ const changePasswordSchema = z.object({
 const claimAdminZodSchema = z.object({
   body: z.object({
     email: z
-      .string({ required_error: 'Email is required' })
+      .string({ error: 'Email is required' })
       .email('Invalid email address'),
     currentPassword: z.string({
-      required_error: 'Current password is required',
+      error: 'Current password is required',
     }),
     newPassword: z
-      .string({ required_error: 'New password is required' })
+      .string({ error: 'New password is required' })
       .regex(
         passwordRegex,
         'Password must include upper, lower, number, special and be 8+ chars',
       )
       .max(128, 'Password cannot exceed 128 characters'),
     confirmPassword: z.string({
-      required_error: 'Confirm password is required',
+      error: 'Confirm password is required',
     }),
   }),
 });

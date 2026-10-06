@@ -242,53 +242,6 @@ const deleteUserByAdmin = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const addFavoriteChauffeur = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload;
-  const userId = user?.id || (user as any)?.userId || (user as any)?._id;
-  const { chauffeurId } = req.params;
-  const result = await UserService.addFavoriteChauffeur(userId, chauffeurId);
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: result.isAlreadyFavorite
-      ? 'Chauffeur is already in your favorites'
-      : 'Chauffeur added to favorites successfully',
-    data: result.data,
-  });
-});
-
-const removeFavoriteChauffeur = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload;
-  const userId = user?.id || (user as any)?.userId || (user as any)?._id;
-  const { chauffeurId } = req.params;
-  const result = await UserService.removeFavoriteChauffeur(
-    userId,
-    chauffeurId,
-  );
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: 'Chauffeur removed from favorites successfully',
-    data: result,
-  });
-});
-
-const getFavoriteChauffeurs = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload;
-  const userId = user?.id || (user as any)?.userId || (user as any)?._id;
-  const result = await UserService.getFavoriteChauffeurs(userId, req.query);
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: 'Favorite chauffeurs retrieved successfully',
-    cursor: result.cursor,
-    data: result.data,
-  });
-});
-
 const searchChauffeurs = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
   const userId = user?.id || (user as any)?.userId || (user as any)?._id;
@@ -329,9 +282,6 @@ export const UserController = {
   getUserReviews,
   deleteAccount,
   deleteUserByAdmin,
-  addFavoriteChauffeur,
-  removeFavoriteChauffeur,
-  getFavoriteChauffeurs,
   searchChauffeurs,
   getUserStats,
 };
