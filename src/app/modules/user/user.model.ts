@@ -21,6 +21,13 @@ const userSchema = new Schema<IUser>(
       enum: Object.values(USER_ROLES),
       default: USER_ROLES.PROMOTER,
     },
+    businessName: {
+      type: String,
+      required: function (this: IUser) {
+        return this.role === USER_ROLES.BUSINESS_OWNER;
+      },
+      trim: true,
+    },
     email: {
       type: String,
       required: true,
@@ -33,6 +40,10 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: true,
       select: false,
+    },
+    needsPasswordChange: {
+      type: Boolean,
+      default: false,
     },
     phone: {
       type: String,
@@ -112,6 +123,10 @@ const userSchema = new Schema<IUser>(
       ref: 'User',
       default: null,
     },
+    rewardBalance: {
+      type: Number,
+      default: 0,
+    },
     authentication: {
       type: {
         hashedOtp: {
@@ -129,6 +144,10 @@ const userSchema = new Schema<IUser>(
         resendTimestamps: {
           type: [Date],
           default: [],
+        },
+        purpose: {
+          type: String,
+          default: null,
         },
       },
       select: false,

@@ -7,22 +7,34 @@ const passwordRegex =
 
 // 2.1 Register Schema
 const registerUserZodSchema = z.object({
-  body: z.object({
-    name: z.string({ error: 'Name is required' }).min(1),
-    email: z
-      .string({ error: 'Email is required' })
-      .email('Invalid email address'),
-    password: z
-      .string({ error: 'Password is required' })
-      .regex(
-        passwordRegex,
-        'Password must include upper, lower, number, special and be 8+ chars',
-      )
-      .max(128, 'Password cannot exceed 128 characters'),
-    phone: z
-      .string({ error: 'Phone is required' })
-      .regex(phoneRegex, 'Phone must be 7-15 digits, optional +'),
-  }),
+  body: z
+    .object({
+      name: z.string({ error: 'Name is required' }).min(1),
+      email: z
+        .string({ error: 'Email is required' })
+        .email('Invalid email address'),
+      password: z
+        .string({ error: 'Password is required' })
+        .regex(
+          passwordRegex,
+          'Password must include upper, lower, number, special and be 8+ chars',
+        )
+        .max(128, 'Password cannot exceed 128 characters'),
+      phone: z
+        .string({ error: 'Phone is required' })
+        .regex(phoneRegex, 'Phone must be 7-15 digits, optional +'),
+      role: z.enum(['PROMOTER', 'BUSINESS_OWNER', 'ADMIN']).optional(),
+      businessName: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.role === 'BUSINESS_OWNER' && (!data.businessName || data.businessName.trim() === '')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Business name is required for Business Owners',
+          path: ['businessName'],
+        });
+      }
+    }),
 });
 
 // 2.2 Verify OTP

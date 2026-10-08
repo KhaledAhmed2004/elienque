@@ -5,7 +5,6 @@ import { Chat } from './chat.model';
 import { IChat, IChatWithUnread } from './chat.interface';
 import { Message } from '../message/message.model';
 import { User } from '../user/user.model';
-import { Item } from '../item/item.model';
 
 const escapeRegex = (str: string): string => {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -161,15 +160,11 @@ const getMyChats = async (
       })
         .select('_id')
         .lean(),
-      Item.find({
-        title: searchRegex,
-      })
-        .select('_id')
-        .lean(),
+      Promise.resolve([] as any[]),
     ]);
 
-    const matchingUserIds = matchingUsers.map(u => u._id);
-    const matchingItemIds = matchingItems.map(i => i._id);
+    const matchingUserIds = matchingUsers.map((u: any) => u._id);
+    const matchingItemIds = matchingItems.map((i: any) => i._id);
 
     filterQuery.$or = [
       ...(matchingUserIds.length > 0

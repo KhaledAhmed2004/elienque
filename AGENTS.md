@@ -47,3 +47,4 @@ This repository contains project-level rules, workflows, and skills under `.agen
 ## Context files
 - [src/app/modules/user/AGENTS.md](src/app/modules/user/AGENTS.md): Manages user profiles, chauffeur approvals, and role-based logic.
 - [src/app/modules/campaign/AGENTS.md](src/app/modules/campaign/AGENTS.md): Manages campaign creation, lifecycle, and promoter participation.
+- [src/app/modules/auth/AGENTS.md](src/app/modules/auth/AGENTS.md): Manages authentication, authorization, OTP verification, and JWT token logic.

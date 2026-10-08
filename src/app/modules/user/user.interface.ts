@@ -11,8 +11,10 @@ export type IUser = {
   name: string;
   nickname?: string;
   role: USER_ROLES;
+  businessName?: string;
   email: string;
   password?: string; // Optional because of select: false
+  needsPasswordChange?: boolean;
   phone: string;
   profilePicture?: string;
   accountState: ACCOUNT_STATE;
@@ -31,12 +33,14 @@ export type IUser = {
   rejectedBy?: Types.ObjectId;
   reactivatedAt?: Date;
   reactivatedBy?: Types.ObjectId;
+  rewardBalance: number;
   paymentMethods?: any;
   authentication?: {
     hashedOtp?: string;
     expireAt?: Date;
     attempts: number;
     resendTimestamps: Date[];
+    purpose?: string;
   };
 };
 
