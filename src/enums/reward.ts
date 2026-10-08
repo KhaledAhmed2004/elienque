@@ -1,0 +1,11 @@
+export enum RECEIPT_STATUS {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+export enum CASH_OUT_STATUS {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  REJECTED = 'REJECTED',
+}

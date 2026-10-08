@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const createCampaignZodSchema = z.object({
   body: z.object({
+    businessId: z.string().optional(),
     title: z.string().min(1, { message: 'Title is required' }),
     reward: z.string().min(1, { message: 'Reward is required' }),
     offer: z.string().min(1, { message: 'Offer is required' }),
@@ -13,6 +14,7 @@ const createCampaignZodSchema = z.object({
       .refine((date) => !isNaN(Date.parse(date)), {
         message: 'Invalid end date format',
       }),
+    minimumSpend: z.number().min(0, { message: 'Minimum spend must be a non-negative number' }),
   }).refine(data => new Date(data.startDate) < new Date(data.endDate), {
     message: 'Start Date must be before End Date',
     path: ['startDate'],
@@ -30,6 +32,7 @@ const updateCampaignZodSchema = z.object({
     endDate: z.string().refine((date) => !isNaN(Date.parse(date)), {
       message: 'Invalid end date format',
     }).optional(),
+    minimumSpend: z.number().min(0).optional(),
   }),
 });
 

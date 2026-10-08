@@ -8,6 +8,7 @@ export type ICampaign = {
   offer: string;
   startDate: Date;
   endDate: Date;
+  minimumSpend: number;
   status: CAMPAIGN_STATUS;
 };
 

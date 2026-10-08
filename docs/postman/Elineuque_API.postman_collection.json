@@ -1,0 +1,311 @@
+{
+  "info": {
+    "name": "Elineuque APIs",
+    "description": "Consolidated Postman collection for Elineuque Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "stats"
+              ]
+            },
+            "description": "Retrieves overall platform summary metrics."
+          }
+        },
+        {
+          "name": "Get Monthly Trends",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/monthly-trends?range=6m&metric=all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "monthly-trends"
+              ],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2024",
+                  "disabled": true
+                },
+                {
+                  "key": "range",
+                  "value": "6m",
+                  "description": "3m | 6m | 12m | this-year"
+                },
+                {
+                  "key": "metric",
+                  "value": "all",
+                  "description": "all | jobs | items"
+                }
+              ]
+            },
+            "description": "Retrieves monthly time trends for jobs and items."
+          }
+        },
+        {
+          "name": "Get Recent Activities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/recent-activities?limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "recent-activities"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Retrieves recent platform activities."
+          }
+        },
+        {
+          "name": "Get Top Performers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/top-performers?limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "top-performers"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Retrieves top businesses and top promoters."
+          }
+        }
+      ],
+      "description": "Postman collection for Dashboard module (Admin access only)"
+    },
+    {
+      "name": "Lead",
+      "item": [
+        {
+          "name": "Submit Lead (Promoter)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{promoter_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessName\": \"Awesome Tech Business\",\n  \"ownerName\": \"John Doe\",\n  \"phone\": \"01711122233\",\n  \"email\": \"johndoe@awesometech.com\",\n  \"address\": \"123 Tech Street, Silicon Valley\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/leads",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "leads"
+              ]
+            },
+            "description": "### 🎯 Purpose\nThis API is used by a **Promoter** to submit a new business lead into the system.\n\n### 🔐 Authentication\nRequires a valid JWT token of a user with the `PROMOTER` role.\n\n### 📝 Request Body\n- **businessName**: (String, Required) Name of the business being referred.\n- **ownerName**: (String, Required) Name of the business owner.\n- **phone**: (String, Required) Contact number of the business.\n- **email**: (String, Required) Valid email address of the business.\n- **address**: (String, Required) Physical address of the business.\n\n### ✅ Expected Outcome\nA new Lead document is created in the database with status `PENDING` and linked to the Promoter's account."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Leads (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/leads",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "leads"
+              ]
+            },
+            "description": "### 🎯 Purpose\nThis API is used by an **Admin** to view all the business leads submitted by all promoters across the system.\n\n### 🔐 Authentication\nRequires a valid JWT token of a user with the `ADMIN` role.\n\n### ✅ Expected Outcome\nReturns an array of all Lead objects. Each Lead object will contain the details of the business as well as the populated `promoterId` (showing the promoter's name, email, etc.) who referred them."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Leads (Promoter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{promoter_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/leads/my-leads",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "leads",
+                "my-leads"
+              ]
+            },
+            "description": "### 🎯 Purpose\nThis API allows a **Promoter** to view a list of all the leads they have personally submitted.\n\n### 🔐 Authentication\nRequires a valid JWT token of a user with the `PROMOTER` role.\n\n### ✅ Expected Outcome\nReturns an array of Lead objects that belong to the logged-in Promoter. Useful for showing on the Promoter's dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Lead (Admin/Promoter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/leads/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "leads",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "your_lead_id_here"
+                }
+              ]
+            },
+            "description": "### 🎯 Purpose\nFetches the details of a specific business lead by its ID.\n\n### 🔐 Authentication\nRequires a valid JWT token of either `ADMIN` or `PROMOTER` role. If a `PROMOTER` requests this, they can only view it if they submitted it.\n\n### ✅ Expected Outcome\nReturns the Lead object."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Lead Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJECTED\",\n  \"adminNote\": \"Tried calling 3 times, number is off.\",\n  \"rejectReason\": \"Unreachable phone number\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/leads/:id/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "leads",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "your_lead_id_here"
+                }
+              ]
+            },
+            "description": "### 🎯 Purpose\nThis API is used by an **Admin** to update the status of a lead (e.g. `IN_PROGRESS`, `APPROVED`, `REJECTED`) and optionally leave internal notes or rejection reasons.\n\n### 🔐 Authentication\nRequires a valid JWT token of a user with the `ADMIN` role.\n\n### 📝 Request Body\n- **status**: (String, Required) Must be one of `PENDING`, `IN_PROGRESS`, `APPROVED`, `REJECTED`.\n- **adminNote**: (String, Optional) Internal note by the admin.\n- **rejectReason**: (String, Optional) The reason for rejection (visible to promoter).\n\n### ✅ Expected Outcome\nThe Lead document is updated."
+          },
+          "response": []
+        }
+      ],
+      "description": "API endpoints for the Business Lead module."
+    }
+  ]
+}

@@ -16,7 +16,7 @@ const handleZodError = (
   // Collect expected fields for suggestions
   const expectedFields: string[] = Array.from(
     new Set(
-      error.errors
+      (error.issues || error.errors || [])
         .flatMap((issue: any) =>
           issue.code === ZodIssueCode.invalid_type && issue.path.length > 1
             ? [String(issue.path[1])]
@@ -27,7 +27,7 @@ const handleZodError = (
   );
 
   // Single pass over all Zod issues
-  error.errors.forEach((issue: any) => {
+  (error.issues || error.errors || []).forEach((issue: any) => {
     switch (issue.code) {
       case ZodIssueCode.unrecognized_keys: {
         const unrec = issue as any;

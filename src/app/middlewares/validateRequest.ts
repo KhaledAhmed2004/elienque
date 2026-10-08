@@ -1,9 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
-import { AnyZodObject } from 'zod';
+import { ZodSchema } from 'zod';
 import { trace } from '@opentelemetry/api';
 
 const validateRequest =
-  (schema: AnyZodObject) =>
+  (schema: ZodSchema | any) =>
   async (req: Request, res: Response, next: NextFunction) => {
     const tracer = trace.getTracer('app');
 

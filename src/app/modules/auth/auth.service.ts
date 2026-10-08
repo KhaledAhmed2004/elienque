@@ -27,7 +27,7 @@ import generateOTP from '../../../util/generateOTP';
 import { ResetToken } from './resetToken/resetToken.model';
 import { User } from '../user/user.model';
 import { IUser } from '../user/user.interface';
-import { ServiceArea } from '../service-area/service-area.model';
+
 import { EmailOutbox } from '../emailOutbox/emailOutbox.model';
 import { ACCOUNT_STATE, APP_STATE, USER_ROLES } from '../../../enums/user';
 import {
@@ -570,7 +570,7 @@ const changePassword = async (user: JwtPayload, payload: IChangePasswordReq) => 
     );
   }
 
-  const isMatch = await User.isMatchPassword(currentPassword, isExistUser.password!);
+  const isMatch = await User.isMatchPassword(currentPassword as string, isExistUser.password!);
   if (!isMatch) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Password is incorrect');
   }
@@ -684,7 +684,9 @@ const loginUser = async (payload: ILoginReq & { deviceToken?: string }) => {
     await User.addDeviceToken(isExistUser._id.toString(), deviceToken);
   }
 
-  const { isApproved, isOnboard } = computeUserAccessState(isExistUser);
+  const accessState: any = computeUserAccessState ? (computeUserAccessState as any)(isExistUser) : {};
+  const isApproved = accessState?.isApproved ?? true;
+  const isOnboard = accessState?.isOnboard ?? true;
 
   const isSuspended = isExistUser.accountState === ACCOUNT_STATE.SUSPENDED;
 
@@ -780,7 +782,8 @@ const getMyStatus = async (userId: string) => {
   if (!user) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
-  const { isApproved } = computeUserAccessState(user);
+  const accessState: any = computeUserAccessState ? (computeUserAccessState as any)(user) : {};
+  const isApproved = accessState?.isApproved ?? true;
   return {
     name: user.name,
     email: user.email,

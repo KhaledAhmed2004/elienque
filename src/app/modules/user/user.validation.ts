@@ -43,22 +43,34 @@ const paymentMethodsSchema = z
   .optional();
 
 const createUserZodSchema = z.object({
-  body: z.object({
-    name: z.string().min(1, 'Name is required'),
-    nickname: z.string().min(1).max(50).optional(),
-    email: z.string().min(1, 'Email is required').email('Invalid email address'),
-    password: z
-      .string().min(1, 'Password is required')
-      .regex(
-        passwordRegex,
-        'Password must include upper, lower, number, special and be 8+ chars',
-      ),
-    phone: z
-      .string().min(1, 'Phone is required')
-      .regex(phoneRegex, 'Phone must be 7-15 digits, optional +'),
-    profilePicture: z.string().optional(),
-    paymentMethods: paymentMethodsSchema,
-  }),
+  body: z
+    .object({
+      name: z.string().min(1, 'Name is required'),
+      nickname: z.string().min(1).max(50).optional(),
+      email: z.string().min(1, 'Email is required').email('Invalid email address'),
+      password: z
+        .string().min(1, 'Password is required')
+        .regex(
+          passwordRegex,
+          'Password must include upper, lower, number, special and be 8+ chars',
+        ),
+      phone: z
+        .string().min(1, 'Phone is required')
+        .regex(phoneRegex, 'Phone must be 7-15 digits, optional +'),
+      profilePicture: z.string().optional(),
+      paymentMethods: paymentMethodsSchema,
+      role: z.enum(['PROMOTER', 'BUSINESS_OWNER', 'ADMIN']).optional(),
+      businessName: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.role === 'BUSINESS_OWNER' && (!data.businessName || data.businessName.trim() === '')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Business name is required for Business Owners',
+          path: ['businessName'],
+        });
+      }
+    }),
 });
 
 const updateUserZodSchema = z.object({
@@ -80,6 +92,7 @@ const updateUserZodSchema = z.object({
       .optional(),
     profilePicture: z.string().optional(),
     paymentMethods: paymentMethodsSchema,
+    businessName: z.string().optional(),
   }),
 });
 
