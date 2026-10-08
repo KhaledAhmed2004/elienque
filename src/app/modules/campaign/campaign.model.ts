@@ -32,6 +32,11 @@ const campaignSchema = new Schema<ICampaign>(
       type: Date,
       required: true,
     },
+    minimumSpend: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
     status: {
       type: String,
       enum: Object.values(CAMPAIGN_STATUS),

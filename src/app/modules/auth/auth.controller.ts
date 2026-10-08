@@ -36,8 +36,8 @@ const verifyOtp = catchAsync(async (req: Request, res: Response) => {
   let responseData: any = result.data;
 
   // Set refresh token in httpOnly cookie for better security if tokens exist
-  if (typeof result.data !== 'string' && result.tokens) {
-    res.cookie('refreshToken', result.tokens.refreshToken, {
+  if (typeof result.data !== 'string' && 'tokens' in result && (result as any).tokens) {
+    res.cookie('refreshToken', (result as any).tokens.refreshToken, {
       httpOnly: true,
       secure: config.node_env === 'production',
       sameSite: 'lax' as const,
@@ -45,8 +45,8 @@ const verifyOtp = catchAsync(async (req: Request, res: Response) => {
     });
 
     responseData = {
-      accessToken: result.tokens.accessToken,
-      isApproved: result.data.isApproved ?? false,
+      accessToken: (result as any).tokens.accessToken,
+      isApproved: (result.data as any).isApproved ?? false,
     };
   }
 
@@ -199,7 +199,7 @@ const changePassword = catchAsync(async (req: Request, res: Response) => {
 });
 
 const claimAdmin = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as IAuthUser;
+  const user = req.user as any;
   const claimData = req.body as IClaimAdminReq;
   const result = await AuthService.claimAdmin(user, claimData);
 

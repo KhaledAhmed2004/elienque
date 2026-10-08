@@ -14,4 +14,29 @@ router.post(
   LeadController.submitLead,
 );
 
+router.get(
+  '/',
+  auth(USER_ROLES.ADMIN),
+  LeadController.getAllLeads,
+);
+
+router.get(
+  '/my-leads',
+  auth(USER_ROLES.PROMOTER),
+  LeadController.getMyLeads,
+);
+
+router.get(
+  '/:id',
+  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER),
+  LeadController.getSingleLead,
+);
+
+router.patch(
+  '/:id/status',
+  auth(USER_ROLES.ADMIN),
+  validateRequest(LeadValidation.updateLeadStatusZodSchema),
+  LeadController.updateLeadStatus,
+);
+
 export const LeadRoutes = router;
