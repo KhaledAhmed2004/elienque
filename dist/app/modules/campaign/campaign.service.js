@@ -11,9 +11,22 @@ const campaignParticipant_model_1 = require("./campaignParticipant.model");
 const campaign_1 = require("../../../enums/campaign");
 const user_1 = require("../../../enums/user");
 const createCampaign = async (user, payload) => {
-    const { title, reward, offer, startDate, endDate } = payload;
+    const { title, reward, offer, startDate, endDate, businessId } = payload;
+    let targetBusinessId = user.id;
+    if (user.role === user_1.USER_ROLES.ADMIN) {
+        if (!businessId) {
+            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Business ID is required for Admin');
+        }
+        // Verify business exists and is a business owner
+        const User = require('../user/user.model').User;
+        const business = await User.findById(businessId);
+        if (!business || business.role !== user_1.USER_ROLES.BUSINESS_OWNER) {
+            throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'Business owner not found');
+        }
+        targetBusinessId = businessId;
+    }
     const campaign = await campaign_model_1.Campaign.create({
-        businessId: user.id,
+        businessId: targetBusinessId,
         title,
         reward,
         offer,
@@ -43,7 +56,10 @@ const activateCampaign = async (id, user) => {
     if (!campaign) {
         throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'Campaign not found');
     }
-    if (user.role !== user_1.USER_ROLES.ADMIN && campaign.businessId.toString() !== user.id) {
+    if (user.role === user_1.USER_ROLES.ADMIN) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Admin cannot activate campaigns directly. Business owner approval is required.');
+    }
+    if (campaign.businessId.toString() !== user.id) {
         throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'You can only activate your own campaigns');
     }
     if (campaign.status !== campaign_1.CAMPAIGN_STATUS.DRAFT) {

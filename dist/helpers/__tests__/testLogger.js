@@ -190,10 +190,6 @@ function logBdd(id, title, docs) {
     }
 }
 function saveBddReport(outputPath) {
-    const savedPath = bddHtmlReporter_1.bddReporter.saveReport(outputPath);
-    console.log(chalk_1.default.bold.green(`\n📊 Interactive HTML BDD Report generated at: `) +
-        chalk_1.default.underline.cyan(savedPath) +
-        '\n');
-    return savedPath;
+    return outputPath || '';
 }
 //# sourceMappingURL=testLogger.js.map

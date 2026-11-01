@@ -5,11 +5,13 @@ const logger_1 = require("../../shared/logger");
 // Allowed origins for CORS
 exports.allowedOrigins = [
     'http://localhost:3000',
+    'https://ferry-iland-frontend.vercel.app',
+    'https://island-hop-web-pi.vercel.app',
+    'http://island-hop-web-pi.vercel.app',
     'https://dashboard.ekkali.app',
     'http://dashboard.ekkali.app',
     'https://api.ekkali.app',
     'http://api.ekkali.app',
-    'https://moeb-dashboard.vercel.app',
     'https://moeb-dashboard.vercel.app',
     'http://localhost:3001',
     'http://localhost:5174',

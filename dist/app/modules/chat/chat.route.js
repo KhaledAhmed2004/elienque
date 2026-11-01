@@ -35,9 +35,9 @@ const chat_controller_1 = require("./chat.controller");
 const chat_validation_1 = require("./chat.validation");
 const router = express_1.default.Router();
 // Read Policy: ADMIN and USER permitted, including suspended accounts (to read existing history & support)
-const chatReadAuth = (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.PROMOTER, user_1.USER_ROLES.BUSINESS_OWNER, auth_1.AUTH_POLICIES.ALLOW_RESTRICTED);
-// Mutation Policy: Active ADMIN and USER only (suspended users cannot initiate new chats or delete records)
-const chatMutationAuth = (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.PROMOTER, user_1.USER_ROLES.BUSINESS_OWNER);
+const chatReadAuth = (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.OPERATOR, user_1.USER_ROLES.USER, auth_1.AUTH_POLICIES.ALLOW_RESTRICTED);
+// Mutation Policy: Active ADMIN, OPERATOR and USER only
+const chatMutationAuth = (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.OPERATOR, user_1.USER_ROLES.USER);
 router.get('/', chatReadAuth, (0, validateRequest_1.default)(chat_validation_1.ChatValidation.getMyChatsQueryZodSchema), chat_controller_1.ChatController.getMyChats);
 // Create or get existing chat (Active accounts only)
 router.post('/', chatMutationAuth, (0, validateRequest_1.default)(chat_validation_1.ChatValidation.createChatZodSchema), chat_controller_1.ChatController.getOrCreate);

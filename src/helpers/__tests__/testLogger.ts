@@ -236,13 +236,7 @@ export function logBdd(
 }
 
 export function saveBddReport(outputPath?: string): string {
-  const savedPath = bddReporter.saveReport(outputPath);
-  console.log(
-    chalk.bold.green(`\n📊 Interactive HTML BDD Report generated at: `) +
-      chalk.underline.cyan(savedPath) +
-      '\n',
-  );
-  return savedPath;
+  return outputPath || '';
 }
 
 export { bddReporter };

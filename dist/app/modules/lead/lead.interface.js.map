@@ -1,1 +1,1 @@
-{"version":3,"file":"lead.interface.js","sourceRoot":"","sources":["../../../../src/app/modules/lead/lead.interface.ts"],"names":[],"mappings":";;;AAEA,IAAY,UAIX;AAJD,WAAY,UAAU;IACpB,iCAAmB,CAAA;IACnB,mCAAqB,CAAA;IACrB,mCAAqB,CAAA;AACvB,CAAC,EAJW,UAAU,0BAAV,UAAU,QAIrB"}
+{"version":3,"file":"lead.interface.js","sourceRoot":"","sources":["../../../../src/app/modules/lead/lead.interface.ts"],"names":[],"mappings":";;;AAEA,IAAY,UAKX;AALD,WAAY,UAAU;IACpB,iCAAmB,CAAA;IACnB,yCAA2B,CAAA;IAC3B,mCAAqB,CAAA;IACrB,mCAAqB,CAAA;AACvB,CAAC,EALW,UAAU,0BAAV,UAAU,QAKrB"}

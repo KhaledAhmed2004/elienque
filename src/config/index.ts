@@ -11,6 +11,12 @@ export default {
   otp_secret: process.env.OTP_SECRET || 'default-fallback-secret-change-me',
   frontend_url: process.env.FRONTEND_URL,
 
+  // Spec 0001: when true, bookings start PENDING with a Stripe payment and hold seats until paid.
+  // Default false keeps the confirm on create flow with an unpaid MANUAL payment.
+  payments: {
+    enabled: process.env.PAYMENTS_ENABLED === 'true',
+  },
+
   // Project branding configuration
   app: {
     name: process.env.APP_NAME || 'Educoin Backend',
@@ -42,9 +48,9 @@ export default {
     host: process.env.EMAIL_HOST,
     pass: process.env.EMAIL_PASS,
   },
-  super_admin: {
-    email: process.env.SUPER_ADMIN_EMAIL,
-    password: process.env.SUPER_ADMIN_PASSWORD,
+  admin: {
+    email: process.env.ADMIN_EMAIL || process.env.SUPER_ADMIN_EMAIL,
+    password: process.env.ADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD,
   },
   firebase_api_key_base64: process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64,
   firebase_web_push_credentials: process.env.FIREBASE_WEB_PUSH_CREDENTIALS,

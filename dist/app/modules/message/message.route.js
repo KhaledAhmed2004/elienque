@@ -12,8 +12,8 @@ const fileHandler_1 = require("../../middlewares/fileHandler");
 const message_controller_1 = require("./message.controller");
 const message_validation_1 = require("./message.validation");
 const router = express_1.default.Router();
-router.get('/:chatId', (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.PROMOTER, user_1.USER_ROLES.BUSINESS_OWNER, { allowRestricted: true }), (0, validateRequest_1.default)(message_validation_1.MessageValidation.getMessagesZodSchema), message_controller_1.MessageController.getMessages);
-router.post('/:chatId', (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.PROMOTER, user_1.USER_ROLES.BUSINESS_OWNER, { allowRestricted: true }), (0, fileHandler_1.fileHandler)([
+router.get('/:chatId', (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.OPERATOR, user_1.USER_ROLES.USER, { allowRestricted: true }), (0, validateRequest_1.default)(message_validation_1.MessageValidation.getMessagesZodSchema), message_controller_1.MessageController.getMessages);
+router.post('/:chatId', (0, auth_1.default)(user_1.USER_ROLES.ADMIN, user_1.USER_ROLES.OPERATOR, user_1.USER_ROLES.USER, { allowRestricted: true }), (0, fileHandler_1.fileHandler)([
     { name: 'attachments', maxCount: 10 },
     { name: 'file', maxCount: 10 },
     { name: 'image', maxCount: 10 },

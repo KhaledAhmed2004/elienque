@@ -1,28 +1,35 @@
-export { default as QueryBuilder } from './QueryBuilder';
 export {
-  default as CursorQueryBuilder,
-} from './CursorQueryBuilder';
+  default as PrismaQueryBuilder,
+  IPrismaModelDelegate,
+} from './PrismaQueryBuilder';
 export {
-  default as AggregationBuilder,
-  summarizePipeline,
-} from './AggregationBuilder';
+  default as PrismaAnalyticsBuilder,
+  PrismaAggregationBuilder,
+  getPeriodDates,
+  IAnalyticsGrowthOptions,
+  IAnalyticsTimeTrendsOptions,
+  IAnalyticsGroupByOptions,
+  IAnalyticsSummaryOptions,
+  PeriodType,
+  GrowthType,
+  IStatistic,
+  ITrendPoint,
+  IPeriodDates,
+} from './PrismaAnalyticsBuilder';
 
 export type {
   IPaginationInfo,
   IQueryResult,
   IFilterOptions,
   FieldKey,
-} from './QueryBuilder';
+  CursorSortOrder,
+  ICursorPaginationInfo,
+  ICursorQueryResult,
+  ICursorOptions,
+} from './PrismaQueryBuilder';
 
 export {
   DEFAULT_PAGE,
   DEFAULT_LIMIT,
   MAX_LIMIT,
-} from './QueryBuilder';
-
-export type {
-  CursorSortOrder,
-  ICursorPaginationInfo,
-  ICursorQueryResult,
-  ICursorOptions,
-} from './CursorQueryBuilder';
+} from './PrismaQueryBuilder';

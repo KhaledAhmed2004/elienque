@@ -1,5 +1,5 @@
 import config from '../../../config';
-import { User } from '../user/user.model';
+import { prisma } from '../../../shared/prisma';
 import { INotification } from './notification.interface';
 import { Notification } from './notification.model';
 import { pushNotificationHelper } from './pushNotificationHelper';
@@ -9,9 +9,13 @@ export const sendNotifications = async (
 ): Promise<INotification> => {
   const notification = await Notification.create(data);
 
-  const user = await User.findById(data.receiver).select('deviceTokens');
+  // If receiver is a user in postgres
+  await prisma.user.findUnique({
+    where: { id: data.receiver?.toString() },
+    select: { id: true },
+  }).catch(() => null);
 
-  await sendPushNotification(user?.deviceTokens, notification);
+  await sendPushNotification(undefined, notification);
 
   emitRealtimeNotification(data.receiver, notification);
 

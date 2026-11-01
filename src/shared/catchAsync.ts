@@ -6,8 +6,11 @@ const catchAsync =
     try {
       await fn(req, res, next);
     } catch (error) {
-      next(error);
+      // In Express, next(null) or next(undefined) signals "no error" and skips error middleware.
+      // Wrap nullish thrown values so they reliably reach globalErrorHandler.
+      next(error ?? new Error('Unhandled null or undefined rejection'));
     }
   };
 
 export default catchAsync;
+

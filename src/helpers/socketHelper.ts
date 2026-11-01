@@ -1,16 +1,13 @@
 import colors from 'colors';
-import { Types } from 'mongoose';
 import { JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { logger } from '../shared/logger';
 import { jwtHelper } from './jwtHelper';
 import config from '../config';
-import { Chat } from '../app/modules/chat/chat.model';
-import { User } from '../app/modules/user/user.model';
-
+import prisma from '../shared/prisma';
 
 const isValidId = (v: unknown): v is string =>
-  typeof v === 'string' && Types.ObjectId.isValid(v);
+  typeof v === 'string' && v.trim().length > 0;
 
 // Room Name Generators
 const USER_ROOM = (userId: string) => `user::${userId}`;
@@ -68,9 +65,9 @@ const socket = (io: Server) => {
         const chatId = (data as any)?.chatId;
         if (!isValidId(chatId)) return;
         // Security: Ensure only chat participants can join the room
-        const allowed = await Chat.exists({
-          _id: chatId,
-          participants: userId,
+        const allowed = await prisma.chatParticipant.findFirst({
+          where: { chatId, userId },
+          select: { id: true },
         });
         if (!allowed) {
           logEvent('JOIN_CHAT_DENIED', `for chat_id: ${chatId}`);
@@ -132,7 +129,10 @@ const socket = (io: Server) => {
         if (rawRoomId.startsWith('chat::')) {
           const chatId = rawRoomId.replace('chat::', '');
           if (!isValidId(chatId)) return;
-          const allowed = await Chat.exists({ _id: chatId, participants: userId });
+          const allowed = await prisma.chatParticipant.findFirst({
+            where: { chatId, userId },
+            select: { id: true },
+          });
           if (!allowed) {
             logEvent('JOIN_ROOM_DENIED', `for room: ${rawRoomId}`);
             return;

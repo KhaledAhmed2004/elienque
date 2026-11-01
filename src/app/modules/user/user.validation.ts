@@ -1,98 +1,43 @@
 import { z } from 'zod';
-import { CARD_PAYMENT_STATUS } from '../../../enums/user';
+import { Role, AccountStatus } from '@prisma/client';
 
 const phoneRegex = /^\+?[0-9]{7,15}$/;
-const passwordRegex =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-={}\[\]|;:'",.<>/?]).{8,}$/;
 
-const paymentMethodsSchema = z
-  .union([
-    z.object({
-      zelle: z
-        .object({
-          email: z.string().email('Invalid email address').optional(),
-        })
-        .optional(),
-      venmo: z
-        .object({
-          username: z.string().optional(),
-        })
-        .optional(),
-      cashApp: z
-        .object({
-          cashtag: z.string().optional(),
-        })
-        .optional(),
-      cardPayment: z
-        .object({
-          status: z
-            .enum(Object.values(CARD_PAYMENT_STATUS) as [string, ...string[]])
-            .optional(),
-        })
-        .optional(),
-    }),
-    z.string().transform(val => {
-      try {
-        const parsed = JSON.parse(val);
-        return typeof parsed === 'object' && parsed !== null ? parsed : {};
-      } catch {
-        return {};
-      }
-    }),
-  ])
-  .optional();
-
-const createUserZodSchema = z.object({
+// Mirrors NestJS UpdateProfileDto (min 2 chars name) + optional phone/operator details
+const updateProfileZodSchema = z.object({
   body: z
     .object({
-      name: z.string().min(1, 'Name is required'),
-      nickname: z.string().min(1).max(50).optional(),
-      email: z.string().min(1, 'Email is required').email('Invalid email address'),
-      password: z
-        .string().min(1, 'Password is required')
-        .regex(
-          passwordRegex,
-          'Password must include upper, lower, number, special and be 8+ chars',
-        ),
-      phone: z
-        .string().min(1, 'Phone is required')
-        .regex(phoneRegex, 'Phone must be 7-15 digits, optional +'),
+      name: z.string().min(2, 'Name must be at least 2 characters long').optional(),
+      email: z.string().email('Invalid email address').optional(),
+      phoneNumber: z.string().regex(phoneRegex, 'Invalid phone number format').optional().nullable(),
+      phone: z.string().regex(phoneRegex, 'Invalid phone number format').optional().nullable(),
+      companyName: z.string().min(1).optional(),
+      contactPersonName: z.string().min(1).optional(),
       profilePicture: z.string().optional(),
-      paymentMethods: paymentMethodsSchema,
-      role: z.enum(['PROMOTER', 'BUSINESS_OWNER', 'ADMIN']).optional(),
-      businessName: z.string().optional(),
     })
-    .superRefine((data, ctx) => {
-      if (data.role === 'BUSINESS_OWNER' && (!data.businessName || data.businessName.trim() === '')) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Business name is required for Business Owners',
-          path: ['businessName'],
-        });
-      }
+    .passthrough(),
+});
+
+// Mirrors NestJS UpdatePasswordDto (oldPassword required, newPassword min 8)
+const updatePasswordZodSchema = z.object({
+  body: z
+    .object({
+      oldPassword: z.string().min(1, 'Old password is required').optional(),
+      currentPassword: z.string().min(1).optional(),
+      newPassword: z
+        .string()
+        .min(8, 'New password must be at least 8 characters long'),
+    })
+    .refine((data) => data.oldPassword || data.currentPassword, {
+      message: 'Current password is required',
+      path: ['oldPassword'],
     }),
 });
 
-const updateUserZodSchema = z.object({
+const updateStatusZodSchema = z.object({
   body: z.object({
-    name: z.string().min(1).optional(),
-    nickname: z.string().max(50).optional(),
-    email: z.string().email('Invalid email address').optional(),
-    phone: z
-      .string()
-      .regex(phoneRegex, 'Phone must be 7-15 digits, optional +')
-      .optional(),
-    experience: z.coerce.number().min(0).optional(),
-    password: z
-      .string()
-      .regex(
-        passwordRegex,
-        'Password must include upper, lower, number, special and be 8+ chars',
-      )
-      .optional(),
-    profilePicture: z.string().optional(),
-    paymentMethods: paymentMethodsSchema,
-    businessName: z.string().optional(),
+    status: z.enum(AccountStatus).optional(),
+    reason: z.string().max(500).optional(),
   }),
 });
 
@@ -103,24 +48,76 @@ const suspendUserZodSchema = z.object({
 });
 
 const blockUserZodSchema = suspendUserZodSchema;
-
-const rejectUserZodSchema = z.object({
-  body: z.object({
-    reason: z.string().max(500).optional(),
-  }),
-});
+const rejectUserZodSchema = suspendUserZodSchema;
 
 const deleteUserZodSchema = z.object({
   body: z.object({
-    password: z.string().min(1, 'Password is required for account deletion'),
+    password: z.string().optional(),
   }),
 });
 
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+
+// Mirrors NestJS RegisterDto / User creation
+const createUserZodSchema = z.object({
+  body: z
+    .object({
+      name: z.string().min(2, 'Name must be at least 2 characters long').optional(),
+      email: z.string().min(1, 'Email is required').email('Invalid email address'),
+      password: z
+        .string()
+        .min(8, 'Password must be at least 8 characters long')
+        .regex(
+          passwordRegex,
+          'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+        ),
+      phone: z.string().regex(phoneRegex, 'Invalid phone number format').optional(),
+      phoneNumber: z.string().regex(phoneRegex, 'Invalid phone number format').optional(),
+      role: z
+        .enum(Role)
+        .optional()
+        .default(Role.USER),
+      companyName: z.string().optional(),
+      contactPersonName: z.string().optional(),
+      profilePicture: z.string().optional(),
+    })
+    .passthrough()
+    .superRefine((data, ctx) => {
+      if (data.role === Role.OPERATOR) {
+        if (!data.companyName) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'companyName is required for operator',
+            path: ['companyName'],
+          });
+        }
+      } else {
+        if (!data.name || !data.name.trim()) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Name is required',
+            path: ['name'],
+          });
+        }
+      }
+      if (!data.phone && !data.phoneNumber) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Phone is required',
+          path: ['phone'],
+        });
+      }
+    }),
+});
+
 export const UserValidation = {
-  createUserZodSchema,
-  updateUserZodSchema,
+  updateProfileZodSchema,
+  updateUserZodSchema: updateProfileZodSchema,
+  updatePasswordZodSchema,
+  updateStatusZodSchema,
   suspendUserZodSchema,
   blockUserZodSchema,
   rejectUserZodSchema,
   deleteUserZodSchema,
+  createUserZodSchema,
 };

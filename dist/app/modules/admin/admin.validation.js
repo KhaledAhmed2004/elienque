@@ -2,30 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminValidation = void 0;
 const zod_1 = require("zod");
-const monthlyTrendsQuerySchema = zod_1.z.object({
-    query: zod_1.z.object({
-        year: zod_1.z
-            .union([zod_1.z.string(), zod_1.z.number()])
-            .refine(val => !isNaN(Number(val)) && Number(val) >= 2000 && Number(val) <= 2100, {
-            message: 'Year must be a valid 4-digit year between 2000 and 2100',
-        })
-            .optional(),
-        range: zod_1.z.enum(['3m', '6m', '12m', 'this-year']).optional(),
-        metric: zod_1.z.enum(['all', 'jobs', 'items']).optional(),
-    }),
+const updateCommissionZodSchema = zod_1.z.object({
+    rate: zod_1.z.number().min(0).max(100).optional(),
+    schedule: zod_1.z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).optional(),
 });
-const recentActivitiesQuerySchema = zod_1.z.object({
-    query: zod_1.z.object({
-        limit: zod_1.z
-            .union([zod_1.z.string(), zod_1.z.number()])
-            .refine(val => !isNaN(Number(val)) && Number(val) >= 1 && Number(val) <= 50, {
-            message: 'Limit must be a positive integer between 1 and 50',
-        })
-            .optional(),
-    }),
+const updatePlatformZodSchema = zod_1.z.object({
+    name: zod_1.z.string().min(1, 'Platform name cannot be empty').optional(),
+    email: zod_1.z.email('Valid support email required').optional(),
 });
 exports.AdminValidation = {
-    monthlyTrendsQuerySchema,
-    recentActivitiesQuerySchema,
+    updateCommissionZodSchema,
+    updatePlatformZodSchema,
 };
 //# sourceMappingURL=admin.validation.js.map

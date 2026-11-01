@@ -10,12 +10,13 @@ const router = express.Router();
 // Read Policy: ADMIN and USER permitted, including suspended accounts (to read existing history & support)
 const chatReadAuth = auth(
   USER_ROLES.ADMIN,
-  USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+  USER_ROLES.OPERATOR,
+  USER_ROLES.USER,
   AUTH_POLICIES.ALLOW_RESTRICTED,
 );
 
-// Mutation Policy: Active ADMIN and USER only (suspended users cannot initiate new chats or delete records)
-const chatMutationAuth = auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER);
+// Mutation Policy: Active ADMIN, OPERATOR and USER only
+const chatMutationAuth = auth(USER_ROLES.ADMIN, USER_ROLES.OPERATOR, USER_ROLES.USER);
 
 router.get(
   '/',

@@ -32,6 +32,11 @@ const campaignSchema = new mongoose_1.Schema({
         type: Date,
         required: true,
     },
+    minimumSpend: {
+        type: Number,
+        required: true,
+        default: 0,
+    },
     status: {
         type: String,
         enum: Object.values(campaign_1.CAMPAIGN_STATUS),

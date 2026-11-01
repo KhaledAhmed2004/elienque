@@ -51,9 +51,37 @@ const getTopPerformers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getOperatorOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await DashboardService.getOperatorOverview(req.user.id);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Operator overview retrieved successfully',
+    data: result,
+  });
+});
+
+const getAdminAnalyticsOverview = catchAsync(
+  async (req: Request, res: Response) => {
+    const periodParam =
+      (req.query.period as string) ||
+      (req.query.days as string) ||
+      '30d';
+    const result = await DashboardService.getAdminAnalyticsOverview(periodParam);
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Admin analytics overview retrieved successfully',
+      data: result,
+    });
+  },
+);
+
 export const DashboardController = {
   getDashboardStats,
   getMonthlyTrends,
   getRecentActivities,
   getTopPerformers,
+  getOperatorOverview,
+  getAdminAnalyticsOverview,
 };

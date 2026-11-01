@@ -117,15 +117,53 @@ const validateRequest = (schema) => async (req, res, next) => {
             span.setAttribute('http.method', req.method);
             span.setAttribute('http.route', (req.route && req.route.path) || req.originalUrl || 'n/a');
             span.addEvent('VALIDATE_START');
-            const result = await schema.parseAsync({
-                body: req.body,
-                params: req.params,
-                query: req.query,
-                cookies: req.cookies,
-            });
+            const isWrappedSchema = (targetSchema) => {
+                if (!targetSchema)
+                    return false;
+                let target = targetSchema;
+                while (target._def?.schema || target._def?.innerType || target.def?.innerType) {
+                    target = target._def?.schema || target._def?.innerType || target.def?.innerType;
+                }
+                const shape = target.shape ||
+                    (typeof target._def?.shape === 'function' ? target._def.shape() : target._def?.shape) ||
+                    target.def?.shape;
+                if (!shape || typeof shape !== 'object')
+                    return false;
+                return 'body' in shape || 'query' in shape || 'params' in shape || 'cookies' in shape;
+            };
+            const isWrapped = isWrappedSchema(schema);
+            let result;
+            if (isWrapped) {
+                result = await schema.parseAsync({
+                    body: req.body,
+                    params: req.params,
+                    query: req.query,
+                    cookies: req.cookies,
+                });
+                if (result && typeof result === 'object') {
+                    if (result.body !== undefined)
+                        req.body = result.body;
+                    if (result.query !== undefined)
+                        req.query = result.query;
+                    if (result.params !== undefined)
+                        req.params = result.params;
+                }
+            }
+            else {
+                result = await schema.parseAsync(req.body);
+                if (result !== undefined) {
+                    req.body = result;
+                }
+            }
             // Count validated fields
             try {
-                const bodyFields = result.body ? Object.keys(result.body).length : 0;
+                const bodyFields = isWrapped
+                    ? result?.body
+                        ? Object.keys(result.body).length
+                        : 0
+                    : result && typeof result === 'object'
+                        ? Object.keys(result).length
+                        : 0;
                 span.setAttribute('validation.fields.count', bodyFields);
             }
             catch { }

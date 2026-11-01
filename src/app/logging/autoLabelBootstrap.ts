@@ -8,8 +8,8 @@ import config from '../../config';
 import { sanitize, safeSerialize, truncate, exceedsSize } from './captureUtils';
 import { shouldCapture } from './captureConfig';
 
-// Validate: mongooseMetrics must be loaded first
-LoadOrderValidator.validate('AUTO_LABEL', ['MONGOOSE_METRICS'], 'autoLabelBootstrap.ts');
+// Validate load order
+LoadOrderValidator.validate('AUTO_LABEL', [], 'autoLabelBootstrap.ts');
 // Register this module as loaded
 LoadOrderValidator.markLoaded('AUTO_LABEL', 'autoLabelBootstrap.ts');
 

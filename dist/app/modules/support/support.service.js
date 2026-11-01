@@ -6,14 +6,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SupportService = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const ApiError_1 = __importDefault(require("../../../errors/ApiError"));
-const support_model_1 = require("./support.model");
-const QueryBuilder_1 = __importDefault(require("../../builder/QueryBuilder"));
+const prisma_1 = require("../../../shared/prisma");
+const builder_1 = require("../../builder");
 exports.SupportService = {
     createSupport: async (userId, payload) => {
-        const result = await support_model_1.Support.create({
-            subject: payload.subject,
-            user: userId,
-            messages: [{ sender: userId, message: payload.message }],
+        const result = await prisma_1.prisma.supportTicket.create({
+            data: {
+                subject: payload.subject,
+                userId,
+                messages: {
+                    create: {
+                        senderId: userId,
+                        message: payload.message,
+                    },
+                },
+            },
+            include: {
+                messages: true,
+                user: {
+                    select: { id: true, name: true, email: true },
+                },
+            },
         });
         if (!result) {
             throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Failed to create support ticket');
@@ -21,57 +34,76 @@ exports.SupportService = {
         return result;
     },
     getAllSupports: async (query) => {
-        const qb = new QueryBuilder_1.default(support_model_1.Support.find(), query)
-            .search(['subject'])
+        const qb = new builder_1.PrismaQueryBuilder(prisma_1.prisma.supportTicket, query, 'SupportTicket')
+            .search(['subject', 'user.name', 'user.email'])
             .filter()
-            .sort()
+            .dateFilter('createdAt')
+            .sort('-createdAt', ['createdAt', 'subject'])
             .paginate()
-            .fields();
-        const data = await qb.modelQuery
-            .populate('user', 'name email')
-            .populate('chat', '_id');
-        const paginationInfo = await qb.getPaginationInfo();
-        return { pagination: paginationInfo, data };
+            .include({
+            user: { select: { id: true, name: true, email: true } },
+            messages: true,
+        });
+        return qb.execute();
     },
     getMyTickets: async (userId, query) => {
-        const qb = new QueryBuilder_1.default(support_model_1.Support.find({ user: userId }), query)
+        const qb = new builder_1.PrismaQueryBuilder(prisma_1.prisma.supportTicket, query, 'SupportTicket')
             .search(['subject'])
-            .filter()
-            .sort()
+            .where({ userId })
+            .filter({ customExcludes: ['userId'] })
+            .dateFilter('createdAt')
+            .sort('-createdAt', ['createdAt', 'subject'])
             .paginate()
-            .fields();
-        const data = await qb.modelQuery.populate('chat', '_id');
-        const paginationInfo = await qb.getPaginationInfo();
-        return { pagination: paginationInfo, data };
+            .include({
+            messages: true,
+        });
+        return qb.execute();
     },
     getSupportById: async (id) => {
-        const result = await support_model_1.Support.findById(id)
-            .populate('user', 'name email')
-            .populate('messages.sender', 'name email')
-            .populate('chat', '_id');
+        const result = await prisma_1.prisma.supportTicket.findUnique({
+            where: { id },
+            include: {
+                user: { select: { id: true, name: true, email: true } },
+                messages: true,
+            },
+        });
         if (!result) {
             throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'Support ticket not found');
         }
         return result;
     },
     addMessage: async (ticketId, userId, message) => {
-        const ticket = await support_model_1.Support.findById(ticketId);
+        const ticket = await prisma_1.prisma.supportTicket.findUnique({
+            where: { id: ticketId },
+        });
         if (!ticket) {
             throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'Support ticket not found');
         }
-        ticket.messages.push({ sender: userId, message });
-        await ticket.save();
-        const result = await support_model_1.Support.findById(ticketId)
-            .populate('user', 'name email')
-            .populate('messages.sender', 'name email');
-        return result;
+        await prisma_1.prisma.supportMessage.create({
+            data: {
+                ticketId,
+                senderId: userId,
+                message,
+            },
+        });
+        return prisma_1.prisma.supportTicket.findUnique({
+            where: { id: ticketId },
+            include: {
+                user: { select: { id: true, name: true, email: true } },
+                messages: true,
+            },
+        });
     },
     deleteSupport: async (id) => {
-        const result = await support_model_1.Support.findByIdAndDelete(id);
-        if (!result) {
+        try {
+            await prisma_1.prisma.supportTicket.delete({
+                where: { id },
+            });
+            return { deleted: true };
+        }
+        catch {
             throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'Support ticket not found');
         }
-        return { deleted: true };
     },
 };
 //# sourceMappingURL=support.service.js.map

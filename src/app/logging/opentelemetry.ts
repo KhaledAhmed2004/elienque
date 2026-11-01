@@ -5,8 +5,8 @@
 */
 import { LoadOrderValidator } from './loadOrderValidator';
 
-// Validate: mongooseMetrics and autoLabel must be loaded first
-LoadOrderValidator.validate('OPENTELEMETRY', ['MONGOOSE_METRICS', 'AUTO_LABEL'], 'opentelemetry.ts');
+// Validate: autoLabel must be loaded first
+LoadOrderValidator.validate('OPENTELEMETRY', ['AUTO_LABEL'], 'opentelemetry.ts');
 // Register this module as loaded
 LoadOrderValidator.markLoaded('OPENTELEMETRY', 'opentelemetry.ts');
 

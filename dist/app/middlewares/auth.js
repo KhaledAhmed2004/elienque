@@ -5,31 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AUTH_POLICIES = void 0;
 const http_status_codes_1 = require("http-status-codes");
+const client_1 = require("@prisma/client");
 const config_1 = __importDefault(require("../../config"));
 const ApiError_1 = __importDefault(require("../../errors/ApiError"));
 const jwtHelper_1 = require("../../helpers/jwtHelper");
 const user_1 = require("../../enums/user");
-/**
- * 🏷️ Predefined self-explanatory authorization policy presets for readable route definitions.
- *
- * Usage:
- * ```ts
- * router.post('/vehicles', auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER, AUTH_POLICIES.ALLOW_PENDING_ONBOARDING), ...);
- * ```
- */
 exports.AUTH_POLICIES = {
-    /**
-     * Allows onboarding chauffeurs/users whose accounts are still PENDING admin verification.
-     * Required for onboarding steps (e.g. adding vehicle specifications, uploading documents).
-     */
     ALLOW_PENDING_ONBOARDING: { allowPending: true },
-    /**
-     * Allows optional authentication (public route with optional user context).
-     */
     OPTIONAL: { optional: true },
-    /**
-     * Allows suspended/restricted users (e.g. support appeal channels).
-     */
     ALLOW_RESTRICTED: { allowRestricted: true },
 };
 const isJwtUser = (payload) => {
@@ -37,67 +20,86 @@ const isJwtUser = (payload) => {
         payload !== null &&
         'role' in payload &&
         typeof payload.role === 'string' &&
-        'id' in payload);
+        'id' in payload &&
+        typeof payload.id === 'string');
+};
+const checkAccountStatus = (user, options) => {
+    const currentStatus = (user.status || user.accountState);
+    const isSuspended = currentStatus === client_1.AccountStatus.SUSPENDED ||
+        currentStatus === user_1.ACCOUNT_STATE.SUSPENDED;
+    if (isSuspended && !options.allowRestricted) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been restricted. Contact support.');
+    }
+    const isLocked = currentStatus === client_1.AccountStatus.LOCKED ||
+        currentStatus === user_1.ACCOUNT_STATE.LOCKED;
+    if (isLocked) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account is temporarily locked due to security reasons. Contact support.');
+    }
+    const isDeactivated = currentStatus === client_1.AccountStatus.DEACTIVATED ||
+        currentStatus === user_1.ACCOUNT_STATE.DEACTIVATED;
+    if (isDeactivated) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been deactivated.');
+    }
+    const isPending = currentStatus === client_1.AccountStatus.UNVERIFIED ||
+        currentStatus === user_1.ACCOUNT_STATE.UNVERIFIED;
+    if (isPending && !options.allowPending) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account is pending admin approval. Please wait until your account is verified by an administrator.');
+    }
+};
+const checkRoleAccess = (userRole, allowedRoles) => {
+    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, "You don't have permission to access this API");
+    }
+};
+const formatJwtError = (error) => {
+    if (error instanceof Error) {
+        if (error.name === 'JsonWebTokenError') {
+            return new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Invalid token');
+        }
+        if (error.name === 'TokenExpiredError') {
+            return new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Token has expired');
+        }
+        if (error.name === 'NotBeforeError') {
+            return new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Token not active');
+        }
+    }
+    return null;
 };
 const auth = (...args) => {
-    const allowedRoles = args.filter((a) => typeof a === 'string');
-    const options = args.find((a) => typeof a === 'object' && a !== null) ??
-        {};
+    const allowedRoles = args.filter((arg) => typeof arg === 'string');
+    const options = args.find((arg) => typeof arg === 'object' && arg !== null) ?? {};
     return async (req, res, next) => {
         try {
             const authHeader = req.headers.authorization;
-            // 1️⃣ No token provided — require authentication for all protected routes
             if (!authHeader) {
                 if (options.optional) {
                     return next();
                 }
                 throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Authorization token is required');
             }
-            // 2️⃣ Validate Bearer format
             if (!authHeader.startsWith('Bearer ')) {
                 throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Authorization header must start with "Bearer "');
             }
-            // 3️⃣ Extract token and ensure it's not empty
             const token = authHeader.slice(7).trim();
             if (!token) {
                 throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Valid token is required');
             }
-            // 4️⃣ Verify JWT token
             const verifiedPayload = jwtHelper_1.jwtHelper.verifyToken(token, config_1.default.jwt.jwt_secret);
-            // 5️⃣ Runtime validation of JWT claims
             if (!isJwtUser(verifiedPayload)) {
                 throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Invalid token payload');
             }
-            // 6️⃣ Attach verified user to request
+            if (/^[0-9a-fA-F]{24}$/.test(verifiedPayload.id)) {
+                throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Session is invalid or using a legacy identifier. Please log in again.');
+            }
             req.user = verifiedPayload;
-            // 7️⃣ Check status from JWT for restricted/pending users
-            if (verifiedPayload.accountState === user_1.ACCOUNT_STATE.SUSPENDED &&
-                !options.allowRestricted) {
-                throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been restricted. Contact support.');
-            }
-            if (verifiedPayload.accountState === user_1.ACCOUNT_STATE.UNVERIFIED &&
-                !options.allowPending) {
-                throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account is pending admin approval. Please wait until your account is verified by an administrator.');
-            }
-            // 8️⃣ Role-based access check
-            if (allowedRoles.length > 0 &&
-                !allowedRoles.includes(verifiedPayload.role)) {
-                throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, "You don't have permission to access this API");
-            }
-            // 9️⃣ Proceed
+            checkAccountStatus(verifiedPayload, options);
+            checkRoleAccess(verifiedPayload.role, allowedRoles);
             next();
         }
         catch (error) {
-            if (error instanceof Error) {
-                if (error.name === 'JsonWebTokenError') {
-                    return next(new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Invalid token'));
-                }
-                if (error.name === 'TokenExpiredError') {
-                    return next(new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Token has expired'));
-                }
-                if (error.name === 'NotBeforeError') {
-                    return next(new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Token not active'));
-                }
+            const jwtError = formatJwtError(error);
+            if (jwtError) {
+                return next(jwtError);
             }
             next(error);
         }

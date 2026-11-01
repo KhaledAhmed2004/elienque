@@ -44,6 +44,9 @@ exports.EmailService = {
      * Raw send email method via nodemailer transporter
      */
     sendEmail: async (options) => {
+        if (process.env.NODE_ENV === 'test' || !config_1.default.email.host) {
+            return;
+        }
         try {
             await transporter.sendMail({
                 from: `"Moeb26" <${config_1.default.email.from}>`,

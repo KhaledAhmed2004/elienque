@@ -9,56 +9,118 @@ import express from 'express';
 
 const router = express.Router();
 
+const ALL_ROLES = [
+  USER_ROLES.USER,
+  USER_ROLES.OPERATOR,
+  USER_ROLES.ADMIN,
+];
+
+// Get aggregated admin dashboard metrics and overview
 router.get(
-  '/profile',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
-  UserController.getUserProfile,
+  '/admin-dashboard',
+  auth(USER_ROLES.ADMIN),
+  UserController.getAdminDashboard,
 );
 
+// Get current authenticated user profile and details
+router.get('/me', auth(...ALL_ROLES), UserController.getProfile);
+
+// Update user profile
+router.patch(
+  '/me',
+  auth(...ALL_ROLES),
+  fileHandler([{ name: 'profilePicture', maxCount: 1 }]),
+  validateRequest(UserValidation.updateProfileZodSchema),
+  UserController.updateMyProfile,
+);
+
+// Change password for authenticated user and invalidate active sessions
+router.patch(
+  '/me/password',
+  auth(...ALL_ROLES),
+  validateRequest(UserValidation.updatePasswordZodSchema),
+  UserController.updatePassword,
+);
+router.post(
+  '/me/password',
+  auth(...ALL_ROLES),
+  validateRequest(UserValidation.updatePasswordZodSchema),
+  UserController.updatePassword,
+);
+
+// Get list of active login sessions for current user
+router.get('/me/sessions', auth(...ALL_ROLES), UserController.getUserSessions);
+
+// Revoke a specific active session by session ID
+router.delete(
+  '/me/sessions/:id',
+  auth(...ALL_ROLES),
+  UserController.revokeSession,
+);
+
+// Get user profile (alias for /me)
+router.get('/profile', auth(...ALL_ROLES), UserController.getProfile);
+
+// Update user profile (alias for /me)
 router.patch(
   '/profile',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
+  auth(...ALL_ROLES),
   fileHandler([{ name: 'profilePicture', maxCount: 1 }]),
-  validateRequest(UserValidation.updateUserZodSchema),
-  UserController.updateProfile,
+  validateRequest(UserValidation.updateProfileZodSchema),
+  UserController.updateMyProfile,
 );
 
+// Self-delete or deactivate current authenticated user account
 router.delete(
   '/delete-account',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
+  auth(...ALL_ROLES),
   validateRequest(UserValidation.deleteUserZodSchema),
   UserController.deleteAccount,
 );
 
+// Get platform-wide user statistics for admin management
 router.get(
-  '/my-reviews',
-  auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
-  UserController.getMyReviews,
+  '/stats',
+  auth(USER_ROLES.ADMIN),
+  UserController.getUserStats,
+);
+
+// Get paginated list of all users with search and filter queries
+router.get(
+  '/',
+  auth(USER_ROLES.ADMIN),
+  UserController.getAllUsers,
+);
+
+// Get detailed user profile by user ID
+// Update user profile by ID (admin only)
+router.patch(
+  '/:userId',
+  auth(USER_ROLES.ADMIN),
+  validateRequest(UserValidation.updateProfileZodSchema),
+  UserController.updateUserById,
 );
 
 router.get(
-  '/chauffeurs',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
-  UserController.searchChauffeurs,
+  '/:userId',
+  auth(...ALL_ROLES),
+  rateLimitMiddleware({
+    windowMs: 60_000,
+    max: 60,
+    routeName: 'public-user-details',
+  }),
+  UserController.getUserById,
 );
 
-router.get('/stats', auth(USER_ROLES.ADMIN), UserController.getUserStats);
-
-router.get('/', auth(USER_ROLES.ADMIN), UserController.getAllUserRoles);
-
+// Update account status for a specific user (admin only)
 router.patch(
-  '/:userId/approve',
+  '/:userId/status',
   auth(USER_ROLES.ADMIN),
-  UserController.approveUser,
+  validateRequest(UserValidation.updateStatusZodSchema),
+  UserController.updateUserStatus,
 );
 
-router.patch(
-  '/:userId/reject',
-  auth(USER_ROLES.ADMIN),
-  validateRequest(UserValidation.rejectUserZodSchema),
-  UserController.rejectUser,
-);
-
+// Suspend a user account with reason (admin only)
 router.patch(
   '/:userId/suspend',
   auth(USER_ROLES.ADMIN),
@@ -66,13 +128,14 @@ router.patch(
   UserController.suspendUser,
 );
 
+// Reactivate a suspended or deactivated user account (admin only)
 router.patch(
   '/:userId/reactivate',
   auth(USER_ROLES.ADMIN),
   UserController.reactivateUser,
 );
 
-// Backward compatibility aliases
+// Block user account access (admin only)
 router.patch(
   '/:userId/block',
   auth(USER_ROLES.ADMIN),
@@ -80,34 +143,14 @@ router.patch(
   UserController.blockUser,
 );
 
+// Unblock user account access (admin only)
 router.patch(
   '/:userId/unblock',
   auth(USER_ROLES.ADMIN),
   UserController.unblockUser,
 );
 
-router.get(
-  '/:userId/reviews',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
-  rateLimitMiddleware({
-    windowMs: 60_000,
-    max: 60,
-    routeName: 'public-user-reviews',
-  }),
-  UserController.getUserReviews,
-);
-
-router.get(
-  '/:userId',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
-  rateLimitMiddleware({
-    windowMs: 60_000,
-    max: 60,
-    routeName: 'public-user-details',
-  }),
-  UserController.getUserDetailsById,
-);
-
+// Permanently delete or soft-delete user account (admin only)
 router.delete(
   '/:userId',
   auth(USER_ROLES.ADMIN),

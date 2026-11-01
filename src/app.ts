@@ -1,6 +1,5 @@
 import path from 'path';
 import cors from 'cors';
-import './app/logging/mongooseMetrics';
 import './app/logging/autoLabelBootstrap';
 import './app/logging/opentelemetry';
 import './app/logging/patchBcrypt';
@@ -19,6 +18,9 @@ import { otelExpressMiddleware } from './app/logging/otelExpress';
 import { allowedOrigins, maybeLogCors } from './app/logging/corsLogger';
 
 const app = express();
+
+// Trust reverse proxy (AWS ALB, Cloudflare, Nginx) for accurate client IP resolution in rate limiters
+app.set('trust proxy', 1);
 
 app.use(Morgan.successHandler);
 app.use(Morgan.errorHandler);
@@ -107,9 +109,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
 app.use(cookieParser());
-
 app.use(requestContextInit);
 app.use(clientInfo);
 app.use(requestLogger);

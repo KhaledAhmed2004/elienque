@@ -1,4 +1,4 @@
-import { ZodError, ZodIssueCode } from 'zod';
+import { ZodError } from 'zod';
 import { IErrorMessage } from '../types/errors.types';
 import { closest } from 'fastest-levenshtein';
 
@@ -17,11 +17,13 @@ const handleZodError = (
   const expectedFields: string[] = Array.from(
     new Set(
       (error.issues || error.errors || [])
-        .flatMap((issue: any) =>
-          issue.code === ZodIssueCode.invalid_type && issue.path.length > 1
-            ? [String(issue.path[1])]
-            : [],
-        )
+        .flatMap((issue: any) => {
+          if (issue.code === 'invalid_type' && issue.path && issue.path.length > 0) {
+            const field = issue.path[issue.path.length - 1];
+            return field ? [String(field)] : [];
+          }
+          return [];
+        })
         .filter(Boolean),
     ),
   );
@@ -29,7 +31,7 @@ const handleZodError = (
   // Single pass over all Zod issues
   (error.issues || error.errors || []).forEach((issue: any) => {
     switch (issue.code) {
-      case ZodIssueCode.unrecognized_keys: {
+      case 'unrecognized_keys': {
         const unrec = issue as any;
         (unrec.keys || []).forEach((key: any) => {
           const cleanKey = key.replace(/^body\./, '');
@@ -45,18 +47,25 @@ const handleZodError = (
         break;
       }
 
-      case ZodIssueCode.invalid_type: {
+      case 'invalid_type': {
         const invalid = issue as any;
         const path = cleanPath(invalid.path);
 
-        if (invalid.received === 'undefined') {
+        const received =
+          invalid.received ??
+          (typeof invalid.message === 'string' &&
+          invalid.message.includes('received undefined')
+            ? 'undefined'
+            : (invalid.message?.match(/received\s+([a-zA-Z0-9_]+)/)?.[1] ?? undefined));
+
+        if (received === 'undefined') {
           // Missing field
           missingFields.push(path);
         } else {
           // Type mismatch
           allErrorMessages.push({
             path,
-            message: `Expected ${invalid.expected} for '${path}', but received ${invalid.received}.`,
+            message: `Expected ${invalid.expected} for '${path}', but received ${received || 'invalid value'}.`,
           });
         }
         break;

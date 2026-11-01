@@ -14,7 +14,6 @@ import {
   IClaimAdminReq,
 } from './auth.validation';
 
-// 2.1 Register User
 const registerUser = catchAsync(async (req: Request, res: Response) => {
   const userData = req.body as IRegisterUserReq;
   const result = await AuthService.registerUser(userData);
@@ -22,45 +21,27 @@ const registerUser = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.CREATED,
-    message:
-      'Registration successful. Please check your email to verify your account.',
+    message: result.message,
     data: result,
   });
 });
 
-// 2.2 Verify OTP
-const verifyOtp = catchAsync(async (req: Request, res: Response) => {
+const verifyEmail = catchAsync(async (req: Request, res: Response) => {
   const verifyData = req.body as IVerifyOtpReq;
-  const result = await AuthService.verifyOtp(verifyData);
-
-  let responseData: any = result.data;
-
-  // Set refresh token in httpOnly cookie for better security if tokens exist
-  if (typeof result.data !== 'string' && 'tokens' in result && (result as any).tokens) {
-    res.cookie('refreshToken', (result as any).tokens.refreshToken, {
-      httpOnly: true,
-      secure: config.node_env === 'production',
-      sameSite: 'lax' as const,
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    });
-
-    responseData = {
-      accessToken: (result as any).tokens.accessToken,
-      isApproved: (result.data as any).isApproved ?? false,
-    };
-  }
+  const result = await AuthService.verifyEmail(verifyData);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
     message: result.message,
-    data: responseData,
+    data: result.data,
   });
 });
 
-// 2.3 Resend OTP
-const resendOtp = catchAsync(async (req: Request, res: Response) => {
-  const result = await AuthService.resendOtp(req.body.email);
+const resendVerification = catchAsync(async (req: Request, res: Response) => {
+  const email = req.body.email;
+  const result = await AuthService.resendVerificationEmail(email);
+
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
@@ -69,19 +50,25 @@ const resendOtp = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// 2.4 Login
 const loginUser = catchAsync(async (req: Request, res: Response) => {
   const loginData = req.body as ILoginReq;
-  const result = await AuthService.loginUser(loginData);
+  const ip = req.ip || req.socket.remoteAddress;
+  const deviceInfo = (req.headers['user-agent'] as string) || 'Unknown Device';
 
-  // Set refresh token in httpOnly cookie for better security
+  const result = await AuthService.loginUser(loginData, ip, deviceInfo);
+
+  // Set refresh token in httpOnly cookie
   if (result?.tokens?.refreshToken) {
     res.cookie('refreshToken', result.tokens.refreshToken, {
       httpOnly: true,
       secure: config.node_env === 'production',
       sameSite: 'lax' as const,
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/',
     });
   }
+
+  const isMobileClient = req.headers['x-client-type'] === 'mobile';
 
   sendResponse(res, {
     success: true,
@@ -89,50 +76,62 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     message: 'User logged in successfully.',
     data: {
       accessToken: result.tokens.accessToken,
+      ...(isMobileClient ? { refreshToken: result.tokens.refreshToken } : {}),
+      sessionId: result.sessionId,
+      user: result.user,
       isApproved: result.isApproved,
-      ...(result.rejectionReason ? { rejectionReason: result.rejectionReason } : {}),
-      ...(result.isRestricted
-        ? { isRestricted: true, blockReason: result.blockReason }
-        : {}),
     },
   });
 });
 
-// 2.5 Refresh Token
 const refreshToken = catchAsync(async (req: Request, res: Response) => {
-  // Prefer reading refresh token from cookie; fallback to body if present
   const cookieToken = req.cookies?.refreshToken as string | undefined;
   const bodyToken = (req.body as { refreshToken?: string })?.refreshToken;
-  const token = cookieToken || bodyToken || '';
+  const bodySessionId = (req.body as { sessionId?: string })?.sessionId;
 
-  const result = await AuthService.refreshToken(token);
+  const token = bodyToken || cookieToken || '';
+  const ip = req.ip || req.socket.remoteAddress;
+  const deviceInfo = (req.headers['user-agent'] as string) || 'Unknown Device';
 
-  // Rotate refresh token in httpOnly cookie
+  const result = await AuthService.refreshToken(
+    bodySessionId || token,
+    token,
+    ip,
+    deviceInfo,
+  );
+
+  // Rotate refresh token cookie
   if (result?.tokens?.refreshToken) {
     res.cookie('refreshToken', result.tokens.refreshToken, {
       httpOnly: true,
       secure: config.node_env === 'production',
       sameSite: 'lax' as const,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
       path: '/',
     });
   }
+
+  const isMobileClient = req.headers['x-client-type'] === 'mobile';
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
     message: 'Token refreshed successfully.',
-    data: result.tokens,
+    data: {
+      accessToken: result.tokens.accessToken,
+      ...(isMobileClient ? { refreshToken: result.tokens.refreshToken } : {}),
+      sessionId: result.sessionId,
+    },
   });
 });
 
-// 2.6 Logout
+// Logout Single Session
 const logoutUser = catchAsync(async (req: Request, res: Response) => {
-  const { deviceToken } = req.body;
+  const { deviceToken, sessionId } = req.body;
   const user = req.user as IAuthUser;
 
-  await AuthService.logoutUser(user, deviceToken);
+  await AuthService.logoutUser(user, sessionId, deviceToken);
 
-  // Clear refresh token cookie on logout
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: config.node_env === 'production',
@@ -147,10 +146,31 @@ const logoutUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// 2.7 Get Current User Profile / Status
+// Logout All Sessions
+const logoutAll = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as IAuthUser;
+
+  await AuthService.logoutAll(user.id);
+
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: config.node_env === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+  });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Logged out from all devices.',
+  });
+});
+
+// Get Current User Status
 const getMyStatus = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as IAuthUser;
   const result = await AuthService.getMyStatus(user.id);
+
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
@@ -159,10 +179,10 @@ const getMyStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Additional Password Management
-const forgetPassword = catchAsync(async (req: Request, res: Response) => {
+// Forgot Password
+const forgotPassword = catchAsync(async (req: Request, res: Response) => {
   const email = req.body.email;
-  const result = await AuthService.forgetPassword(email);
+  const result = await AuthService.forgotPassword(email);
 
   sendResponse(res, {
     success: true,
@@ -172,32 +192,41 @@ const forgetPassword = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// Reset Password
 const resetPassword = catchAsync(async (req: Request, res: Response) => {
   const rawToken = req.headers.authorization || '';
-  const token = rawToken.replace(/^Bearer\s+/i, '').trim();
   const resetData = req.body as IResetPasswordReq;
-  const result = await AuthService.resetPassword(token, resetData);
+  const result = await AuthService.resetPassword(rawToken, resetData);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'Your password has been successfully reset.',
-    data: result,
+    message: result.message,
+    data: null,
   });
 });
 
+// Change Password
 const changePassword = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as IAuthUser;
   const passwordData = req.body as IChangePasswordReq;
-  await AuthService.changePassword(user, passwordData);
+  const result = await AuthService.changePassword(user, passwordData);
+
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: config.node_env === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+  });
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'Your password has been successfully changed',
+    message: result.message,
   });
 });
 
+// Claim Admin
 const claimAdmin = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
   const claimData = req.body as IClaimAdminReq;
@@ -213,13 +242,14 @@ const claimAdmin = catchAsync(async (req: Request, res: Response) => {
 
 export const AuthController = {
   registerUser,
-  verifyOtp,
-  resendOtp,
+  verifyEmail,
+  resendVerification,
   loginUser,
   refreshToken,
   logoutUser,
+  logoutAll,
   getMyStatus,
-  forgetPassword,
+  forgotPassword,
   resetPassword,
   changePassword,
   claimAdmin,

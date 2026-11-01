@@ -10,8 +10,8 @@ exports.getTimelineTotal = exports.timelineTotalsStore = void 0;
   - Pretty-prints per-request span timeline in console for quick diagnosis.
 */
 const loadOrderValidator_1 = require("./loadOrderValidator");
-// Validate: mongooseMetrics and autoLabel must be loaded first
-loadOrderValidator_1.LoadOrderValidator.validate('OPENTELEMETRY', ['MONGOOSE_METRICS', 'AUTO_LABEL'], 'opentelemetry.ts');
+// Validate: autoLabel must be loaded first
+loadOrderValidator_1.LoadOrderValidator.validate('OPENTELEMETRY', ['AUTO_LABEL'], 'opentelemetry.ts');
 // Register this module as loaded
 loadOrderValidator_1.LoadOrderValidator.markLoaded('OPENTELEMETRY', 'opentelemetry.ts');
 // Lazy-load OpenTelemetry SDK modules to avoid compile errors when dependencies are missing

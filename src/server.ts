@@ -1,9 +1,9 @@
-import mongoose from 'mongoose';
 import { Server } from 'socket.io';
 import app from './app';
 import config from './config';
+import { prisma } from './shared/prisma';
 import { allowedOrigins } from './app/logging/corsLogger';
-import { seedSuperAdmin } from './DB/seedAdmin';
+import { seedAdmin } from './DB/seedAdmin';
 import { socketHelper } from './helpers/socketHelper';
 import { errorLogger, logger, notifyCritical } from './shared/logger';
 import { CacheHelper } from './app/shared/CacheHelper';
@@ -12,7 +12,6 @@ import {
   type StartupStatus,
 } from './shared/startupSummary';
 import { createSpinner } from './shared/spinnerHelper';
-import { startOutboxWorker } from './app/modules/emailOutbox/outboxWorker';
 
 let server: any;
 
@@ -89,30 +88,35 @@ function getInitialStartupStatus(): Partial<StartupStatus> {
 }
 
 async function connectToDatabase(startupStatus: Partial<StartupStatus>) {
-  const dbSpinner = createSpinner({
-    text: 'Connecting to MongoDB...',
+  const prismaSpinner = createSpinner({
+    text: 'Connecting to PostgreSQL via Prisma...',
     color: 'cyan',
   });
   try {
-    await mongoose.connect(config.database_url as string);
-    dbSpinner.succeed('MongoDB connected successfully');
+    await prisma.$connect();
+    prismaSpinner.succeed('PostgreSQL (Prisma) connected successfully');
     startupStatus.database = {
       status: 'connected',
-      message: 'MongoDB connected successfully',
+      message: 'PostgreSQL (Prisma) connected successfully',
     };
-  } catch (dbError) {
-    dbSpinner.fail('MongoDB connection failed');
-    throw dbError;
+  } catch (prismaError) {
+    prismaSpinner.fail('PostgreSQL (Prisma) connection failed');
+    throw prismaError;
   }
 }
 
 async function seedSystemData() {
   const seedSpinner = createSpinner({
-    text: 'Verifying super admin account & system seeds...',
+    text: 'Verifying admin account & system seeds...',
     color: 'cyan',
   });
-  await seedSuperAdmin();
-  seedSpinner.succeed('Super admin & system seeds ready');
+  try {
+    await seedAdmin();
+    seedSpinner.succeed('Admin & system seeds ready');
+  } catch (err) {
+    seedSpinner.fail('Seed verification failed');
+    logger.error('Seed verification error:', err);
+  }
 }
 
 function initializeCache(startupStatus: Partial<StartupStatus>) {
@@ -171,8 +175,6 @@ function startServer(
     startupStatus.server = { url, host, port };
 
     setupSocketIO(startupStatus);
-
-    startOutboxWorker(5000);
 
     printStartupSummary(startupStatus);
   });

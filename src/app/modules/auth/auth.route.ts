@@ -8,83 +8,117 @@ import { AuthValidation } from './auth.validation';
 
 const router = express.Router();
 
-// 2.1 Register New Chauffeur
+// Register a new user or operator account
 router.post(
   '/register',
   rateLimitMiddleware({ windowMs: 3600000, max: 5, routeName: 'register-ip' }),
-  rateLimitMiddleware({ windowMs: 3600000, max: 3, routeName: 'register-phone', keyResolver: (req) => req.body?.phone }),
-  rateLimitMiddleware({ windowMs: 3600000, max: 3, routeName: 'register-email', keyResolver: (req) => req.body?.email }),
+  rateLimitMiddleware({
+    windowMs: 3600000,
+    max: 3,
+    routeName: 'register-phone',
+    keyResolver: req => req.body?.phoneNumber || req.body?.phone,
+  }),
+  rateLimitMiddleware({
+    windowMs: 3600000,
+    max: 3,
+    routeName: 'register-email',
+    keyResolver: req => req.body?.email,
+  }),
   validateRequest(AuthValidation.registerUserZodSchema),
   AuthController.registerUser,
 );
 
-// 2.2 Verify OTP
+// Verify email address using 6-digit OTP
 router.post(
-  '/verify-otp',
-  rateLimitMiddleware({ windowMs: 60_000, max: 5, routeName: 'verify-otp' }),
+  '/verify-email',
+  rateLimitMiddleware({ windowMs: 60_000, max: 5, routeName: 'verify-email' }),
   validateRequest(AuthValidation.verifyOtpSchema),
-  AuthController.verifyOtp,
+  AuthController.verifyEmail,
 );
 
-// 2.3 Resend OTP
+// Resend verification OTP to user's email
 router.post(
-  '/resend-otp',
-  rateLimitMiddleware({ windowMs: 60_000, max: 3, routeName: 'resend-otp' }),
+  '/verify-email/resend',
+  rateLimitMiddleware({
+    windowMs: 60_000,
+    max: 3,
+    routeName: 'resend-verification',
+  }),
   validateRequest(AuthValidation.resendOtpSchema),
-  AuthController.resendOtp,
+  AuthController.resendVerification,
 );
 
-// 2.4 Login
+// User and operator authentication (login)
 router.post(
   '/login',
+  rateLimitMiddleware({ windowMs: 60_000, max: 5, routeName: 'login' }),
   validateRequest(AuthValidation.loginSchema),
   AuthController.loginUser,
 );
 
-// 2.5 Refresh Token
+// Refresh access token via rotational session token
 router.post(
-  '/refresh-token',
+  '/refresh',
+  rateLimitMiddleware({
+    windowMs: 60_000,
+    max: 30,
+    routeName: 'refresh-token',
+  }),
   validateRequest(AuthValidation.refreshTokenSchema),
   AuthController.refreshToken,
 );
 
-// 2.6 Logout
+// Logout from current active session
 router.post(
   '/logout',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
+  auth(
+    USER_ROLES.USER,
+    USER_ROLES.OPERATOR,
+    USER_ROLES.ADMIN,
+  ),
   AuthController.logoutUser,
 );
 
-// 2.7 Get Current User Profile / Status
-router.get(
-  '/me',
-  auth(USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER, USER_ROLES.ADMIN, { allowPending: true }),
-  AuthController.getMyStatus,
-);
-
-// Additional password management routes
+// Logout and revoke all active sessions across all devices
 router.post(
-  '/forget-password',
-  validateRequest(AuthValidation.forgetPasswordSchema),
-  AuthController.forgetPassword,
+  '/logout-all',
+  auth(
+    USER_ROLES.USER,
+    USER_ROLES.OPERATOR,
+    USER_ROLES.ADMIN,
+  ),
+  AuthController.logoutAll,
 );
 
+// Request password reset token via email
+router.post(
+  '/forgot-password',
+  rateLimitMiddleware({
+    windowMs: 60_000,
+    max: 3,
+    routeName: 'forgot-password',
+  }),
+  validateRequest(AuthValidation.forgetPasswordSchema),
+  AuthController.forgotPassword,
+);
+
+// Reset password using valid verification token
 router.post(
   '/reset-password',
+  rateLimitMiddleware({
+    windowMs: 60_000,
+    max: 5,
+    routeName: 'reset-password',
+  }),
   validateRequest(AuthValidation.resetPasswordSchema),
   AuthController.resetPassword,
 );
 
-router.post(
-  '/change-password',
-  auth(USER_ROLES.ADMIN, USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER),
-  validateRequest(AuthValidation.changePasswordSchema),
-  AuthController.changePassword,
-);
-
+// Claim and initialize root admin credentials (first-time onboarding)
 router.post(
   '/claim-admin',
   auth(USER_ROLES.ADMIN),
+  rateLimitMiddleware({ windowMs: 60_000, max: 5, routeName: 'claim-admin' }),
   validateRequest(AuthValidation.claimAdminZodSchema),
   AuthController.claimAdmin,
 );

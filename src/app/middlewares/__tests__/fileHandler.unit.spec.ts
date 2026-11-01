@@ -38,11 +38,15 @@ vi.mock('multer', () => {
 
 vi.mock('@aws-sdk/client-s3', () => {
   return {
-    S3Client: vi.fn().mockImplementation(() => ({
-      send: mockS3Send,
-    })),
-    PutObjectCommand: vi.fn().mockImplementation(args => args),
-    DeleteObjectCommand: vi.fn().mockImplementation(args => args),
+    S3Client: vi.fn().mockImplementation(function () {
+      return { send: mockS3Send };
+    }),
+    PutObjectCommand: vi.fn().mockImplementation(function (args) {
+      return args;
+    }),
+    DeleteObjectCommand: vi.fn().mockImplementation(function (args) {
+      return args;
+    }),
   };
 });
 

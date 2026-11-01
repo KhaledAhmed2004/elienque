@@ -1,18 +1,9 @@
-import { Model, Types } from 'mongoose';
+import { Message, User } from '@prisma/client';
 
-export type IMessage = {
-  _id?: Types.ObjectId;
-  id?: string;
-  chatId: Types.ObjectId;
-  sender: Types.ObjectId;
-  text?: string;
-  attachments?: string[];
-  replyTo?: Types.ObjectId | IMessage;
-  readBy?: Types.ObjectId[];
-  createdAt?: Date;
-  updatedAt?: Date;
+export type IMessage = Message & {
+  sender?: Partial<User>;
+  replyTo?: (Message & { sender?: Partial<User> }) | null;
 };
-
 
 export type ISendMessagePayload = {
   text?: string;
@@ -22,6 +13,3 @@ export type ISendMessagePayload = {
   files?: string | string[];
   replyTo?: string;
 };
-
-export type MessageModel = Model<IMessage>;
-

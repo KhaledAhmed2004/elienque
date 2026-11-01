@@ -5,12 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.socketHelper = void 0;
 const colors_1 = __importDefault(require("colors"));
-const mongoose_1 = require("mongoose");
 const logger_1 = require("../shared/logger");
 const jwtHelper_1 = require("./jwtHelper");
 const config_1 = __importDefault(require("../config"));
-const chat_model_1 = require("../app/modules/chat/chat.model");
-const isValidId = (v) => typeof v === 'string' && mongoose_1.Types.ObjectId.isValid(v);
+const prisma_1 = __importDefault(require("../shared/prisma"));
+const isValidId = (v) => typeof v === 'string' && v.trim().length > 0;
 // Room Name Generators
 const USER_ROOM = (userId) => `user::${userId}`;
 const CHAT_ROOM = (chatId) => `chat::${chatId}`;
@@ -52,9 +51,9 @@ const socket = (io) => {
                 if (!isValidId(chatId))
                     return;
                 // Security: Ensure only chat participants can join the room
-                const allowed = await chat_model_1.Chat.exists({
-                    _id: chatId,
-                    participants: userId,
+                const allowed = await prisma_1.default.chatParticipant.findFirst({
+                    where: { chatId, userId },
+                    select: { id: true },
                 });
                 if (!allowed) {
                     logEvent('JOIN_CHAT_DENIED', `for chat_id: ${chatId}`);
@@ -105,7 +104,10 @@ const socket = (io) => {
                     const chatId = rawRoomId.replace('chat::', '');
                     if (!isValidId(chatId))
                         return;
-                    const allowed = await chat_model_1.Chat.exists({ _id: chatId, participants: userId });
+                    const allowed = await prisma_1.default.chatParticipant.findFirst({
+                        where: { chatId, userId },
+                        select: { id: true },
+                    });
                     if (!allowed) {
                         logEvent('JOIN_ROOM_DENIED', `for room: ${rawRoomId}`);
                         return;

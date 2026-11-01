@@ -1,32 +1,18 @@
-import { Model, Types } from 'mongoose';
+import { Chat, ChatParticipant, User } from '@prisma/client';
 
-export type IChat = {
-  _id?: Types.ObjectId;
-  conversationKey?: string;
-  participants: Types.ObjectId[];
-  itemId?: Types.ObjectId | null;
-  jobId?: Types.ObjectId | null;
-  supportId?: Types.ObjectId | null;
-  lastMessage?: string | null;
-  lastMessageAt?: Date | null;
-  createdBy: Types.ObjectId;
-  createdAt?: Date;
-  updatedAt?: Date;
+export type IChat = Chat & {
+  participants?: (ChatParticipant & { user?: Partial<User> })[];
 };
 
 export type IChatParticipant = {
-  _id: Types.ObjectId;
-  id?: string;
+  id: string;
   name: string;
   email?: string;
   profilePicture?: string;
 };
 
-export type IChatWithUnread = IChat & {
-  id?: string;
+export type IChatWithUnread = Chat & {
+  participants?: any[];
   unreadCount: number;
   isRead: boolean;
 };
-
-export type ChatModel = Model<IChat>;
-

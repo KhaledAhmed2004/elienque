@@ -8,40 +8,38 @@ const http_status_codes_1 = require("http-status-codes");
 const catchAsync_1 = __importDefault(require("../../../shared/catchAsync"));
 const sendResponse_1 = __importDefault(require("../../../shared/sendResponse"));
 const admin_service_1 = require("./admin.service");
-const getDashboardStats = (0, catchAsync_1.default)(async (_req, res) => {
-    const result = await admin_service_1.AdminService.getAdminDashboardStats();
+const getPlatformSettings = (0, catchAsync_1.default)(async (_req, res) => {
+    const result = await admin_service_1.AdminService.getPlatformSettings();
     (0, sendResponse_1.default)(res, {
-        success: true,
         statusCode: http_status_codes_1.StatusCodes.OK,
-        message: 'Admin dashboard stats',
+        success: true,
+        message: 'Platform settings retrieved successfully',
         data: result,
     });
 });
-const getMonthlyTrends = (0, catchAsync_1.default)(async (req, res) => {
-    const year = req.query.year ? Number(req.query.year) : undefined;
-    const range = req.query.range;
-    const metric = req.query.metric;
-    const result = await admin_service_1.AdminService.getMonthlyTrends({ year, range, metric });
+const updateCommissionSettings = (0, catchAsync_1.default)(async (req, res) => {
+    const payload = req.body;
+    const result = await admin_service_1.AdminService.updateCommissionSettings(payload);
     (0, sendResponse_1.default)(res, {
-        success: true,
         statusCode: http_status_codes_1.StatusCodes.OK,
-        message: 'Monthly trends retrieved successfully',
+        success: true,
+        message: 'Platform commission settings updated successfully',
         data: result,
     });
 });
-const getRecentActivities = (0, catchAsync_1.default)(async (req, res) => {
-    const limit = Number(req.query.limit) || 5;
-    const result = await admin_service_1.AdminService.getRecentActivities(limit);
+const updatePlatformInfo = (0, catchAsync_1.default)(async (req, res) => {
+    const payload = req.body;
+    const result = await admin_service_1.AdminService.updatePlatformInfo(payload);
     (0, sendResponse_1.default)(res, {
-        success: true,
         statusCode: http_status_codes_1.StatusCodes.OK,
-        message: 'Recent activities retrieved successfully',
+        success: true,
+        message: 'Platform info updated successfully',
         data: result,
     });
 });
 exports.AdminController = {
-    getDashboardStats,
-    getMonthlyTrends,
-    getRecentActivities,
+    getPlatformSettings,
+    updateCommissionSettings,
+    updatePlatformInfo,
 };
 //# sourceMappingURL=admin.controller.js.map

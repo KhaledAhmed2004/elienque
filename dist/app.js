@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const path_1 = __importDefault(require("path"));
 const cors_1 = __importDefault(require("cors"));
-require("./app/logging/mongooseMetrics");
 require("./app/logging/autoLabelBootstrap");
 require("./app/logging/opentelemetry");
 require("./app/logging/patchBcrypt");
@@ -23,6 +22,8 @@ const requestLogger_1 = require("./app/logging/requestLogger");
 const otelExpress_1 = require("./app/logging/otelExpress");
 const corsLogger_1 = require("./app/logging/corsLogger");
 const app = (0, express_1.default)();
+// Trust reverse proxy (AWS ALB, Cloudflare, Nginx) for accurate client IP resolution in rate limiters
+app.set('trust proxy', 1);
 app.use(morgen_1.Morgan.successHandler);
 app.use(morgen_1.Morgan.errorHandler);
 app.use((req, res, next) => {

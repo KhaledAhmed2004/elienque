@@ -38,7 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotificationService = exports.NotificationBuilder = void 0;
 const mongoose_1 = require("mongoose");
-const user_model_1 = require("../../app/modules/user/user.model");
+const prisma_1 = require("../../shared/prisma");
 const templates = __importStar(require("./templates"));
 const push_channel_1 = require("./channels/push.channel");
 const socket_channel_1 = require("./channels/socket.channel");
@@ -320,21 +320,36 @@ class NotificationBuilder {
         return this.sendNow();
     }
     async resolveUsers() {
-        const query = {};
+        const where = {};
         if (this.targetRole) {
-            query.role = this.targetRole;
+            where.role = this.targetRole;
         }
-        else if (this.userIds.length > 0) {
-            query._id = { $in: this.userIds };
+        if (this.userIds.length > 0) {
+            where.id = { in: this.userIds };
         }
-        else {
+        else if (!this.targetRole) {
             return [];
         }
         if (this.excludeIds.length > 0) {
-            query._id = { ...query._id, $nin: this.excludeIds };
+            where.id = { ...(where.id || {}), notIn: this.excludeIds };
         }
-        const users = await user_model_1.User.find(query).select('_id email deviceTokens role name').lean();
-        return users;
+        const users = await prisma_1.prisma.user.findMany({
+            where,
+            select: {
+                id: true,
+                email: true,
+                role: true,
+                name: true,
+            },
+        });
+        return users.map(user => ({
+            _id: user.id,
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: user.name,
+            deviceTokens: [],
+        }));
     }
     resolveContent() {
         const interpolate = (str, vars) => {
@@ -423,8 +438,11 @@ class NotificationBuilder {
     async saveScheduled() {
         let recipientIds = [];
         if (this.targetRole) {
-            const users = await user_model_1.User.find({ role: this.targetRole }).select('_id').lean();
-            recipientIds = users.map((u) => u._id.toString());
+            const users = await prisma_1.prisma.user.findMany({
+                where: { role: this.targetRole },
+                select: { id: true },
+            });
+            recipientIds = users.map(u => u.id);
         }
         else {
             recipientIds = this.userIds;

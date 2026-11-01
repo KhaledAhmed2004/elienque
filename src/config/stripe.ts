@@ -14,29 +14,16 @@ if (!stripeKey) {
   console.warn('⚠️  STRIPE_SECRET_KEY not set — Stripe/payment features will be unavailable.');
 }
 
-// Platform configuration constants
-export const PLATFORM_FEE_PERCENTAGE =
-  Number(process.env.PLATFORM_FEE_PERCENTAGE) || 20;
-
 // Default currency for payments
 export const DEFAULT_CURRENCY = 'usd';
 
-// Utility functions for payment calculations
+// Unit conversion helpers. Commission is read from PlatformSetting (spec 0001), never from env.
 export const dollarsToCents = (dollars: number): number => {
   return Math.round(dollars * 100);
 };
 
 export const centsToDollars = (cents: number): number => {
   return cents / 100;
-};
-
-export const calculatePlatformFee = (amount: number): number => {
-  return Math.round((amount * PLATFORM_FEE_PERCENTAGE) / 100);
-};
-
-export const calculateFreelancerAmount = (totalAmount: number): number => {
-  const platformFee = calculatePlatformFee(totalAmount);
-  return totalAmount - platformFee;
 };
 
 // Error handling utility
@@ -62,7 +49,6 @@ export const handleStripeError = (error: any): string => {
 export const stripeConfig = {
   publishableKey: process.env.STRIPE_PUBLISHABLE_KEY!,
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-  platformFeePercentage: PLATFORM_FEE_PERCENTAGE,
   minimumAmount: Number(process.env.MINIMUM_PAYMENT_AMOUNT) || 5.0,
   maximumAmount: Number(process.env.MAXIMUM_PAYMENT_AMOUNT) || 10000.0,
 };

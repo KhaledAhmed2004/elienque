@@ -39,6 +39,10 @@ const userSchema = new mongoose_1.Schema({
         required: true,
         select: false,
     },
+    needsPasswordChange: {
+        type: Boolean,
+        default: false,
+    },
     phone: {
         type: String,
         required: function () {
@@ -116,6 +120,10 @@ const userSchema = new mongoose_1.Schema({
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',
         default: null,
+    },
+    rewardBalance: {
+        type: Number,
+        default: 0,
     },
     authentication: {
         type: {

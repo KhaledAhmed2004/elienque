@@ -14,10 +14,7 @@ const ApiError_1 = __importDefault(require("../../errors/ApiError"));
 const client_s3_1 = require("@aws-sdk/client-s3");
 const cloudinary_1 = __importDefault(require("cloudinary"));
 const config_1 = __importDefault(require("../../config"));
-// ===============================
-// Configuration & Policies
-// ===============================
-const allowedTypes = {
+const ALLOWED_MIME_TYPES_BY_FOLDER = {
     images: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'],
     media: [
         'video/mp4',
@@ -30,21 +27,133 @@ const allowedTypes = {
     ],
     documents: ['application/pdf'],
 };
-// Default file size limits per category (in MB)
-const CATEGORY_SIZE_LIMITS = {
+const DEFAULT_CATEGORY_SIZE_LIMITS_MB = {
     images: 10,
     documents: 25,
     media: 50,
 };
-// Allowed extensions per folder
-const ALLOWED_EXTENSIONS = {
+const ALLOWED_EXTENSIONS_BY_FOLDER = {
     images: ['.jpg', '.jpeg', '.png', '.webp'],
     documents: ['.pdf'],
     media: ['.mp4', '.webm', '.mp3', '.ogg', '.wav'],
 };
-// ===============================
-// Cloud & Local Storage Providers
-// ===============================
+const PNG_MAGIC_BYTES = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const WEBM_MAGIC_BYTES = [0x1a, 0x45, 0xdf, 0xa3];
+const isValidPngSignature = (fileBuffer) => {
+    if (fileBuffer.length < PNG_MAGIC_BYTES.length) {
+        return false;
+    }
+    return PNG_MAGIC_BYTES.every((expectedByte, byteIndex) => fileBuffer[byteIndex] === expectedByte);
+};
+const isValidJpegSignature = (fileBuffer) => {
+    return (fileBuffer.length >= 3 &&
+        fileBuffer[0] === 0xff &&
+        fileBuffer[1] === 0xd8 &&
+        fileBuffer[2] === 0xff);
+};
+const isValidWebpSignature = (fileBuffer) => {
+    if (fileBuffer.length < 12) {
+        return false;
+    }
+    const riffContainerIdentifier = fileBuffer.toString('ascii', 0, 4);
+    const webpFormatIdentifier = fileBuffer.toString('ascii', 8, 12);
+    return riffContainerIdentifier === 'RIFF' && webpFormatIdentifier === 'WEBP';
+};
+const isValidPdfSignature = (fileBuffer) => {
+    if (fileBuffer.length < 5) {
+        return false;
+    }
+    return fileBuffer.toString('ascii', 0, 5).startsWith('%PDF-');
+};
+const isValidMp4OrM4aSignature = (fileBuffer) => {
+    if (fileBuffer.length < 8) {
+        return false;
+    }
+    return fileBuffer.toString('ascii', 4, 8) === 'ftyp';
+};
+const isValidWebmSignature = (fileBuffer) => {
+    if (fileBuffer.length < WEBM_MAGIC_BYTES.length) {
+        return false;
+    }
+    return WEBM_MAGIC_BYTES.every((expectedByte, byteIndex) => fileBuffer[byteIndex] === expectedByte);
+};
+const isValidMp3Signature = (fileBuffer) => {
+    if (fileBuffer.length < 3) {
+        return false;
+    }
+    const hasId3Tag = fileBuffer.toString('ascii', 0, 3) === 'ID3';
+    const hasMpegAudioFrameSync = fileBuffer[0] === 0xff && (fileBuffer[1] & 0xe0) === 0xe0;
+    return hasId3Tag || hasMpegAudioFrameSync;
+};
+const isValidWavSignature = (fileBuffer) => {
+    if (fileBuffer.length < 12) {
+        return false;
+    }
+    const riffIdentifier = fileBuffer.toString('ascii', 0, 4);
+    const waveIdentifier = fileBuffer.toString('ascii', 8, 12);
+    return riffIdentifier === 'RIFF' && waveIdentifier === 'WAVE';
+};
+const isValidOggSignature = (fileBuffer) => {
+    if (fileBuffer.length < 4) {
+        return false;
+    }
+    return fileBuffer.toString('ascii', 0, 4) === 'OggS';
+};
+const hasValidFileSignature = (fileBuffer, declaredMimeType) => {
+    if (fileBuffer.length < 4) {
+        return false;
+    }
+    if (declaredMimeType === 'image/png') {
+        return isValidPngSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'image/jpeg' || declaredMimeType === 'image/jpg') {
+        return isValidJpegSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'image/webp') {
+        return isValidWebpSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'application/pdf') {
+        return isValidPdfSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'video/mp4' || declaredMimeType === 'audio/mp4') {
+        return isValidMp4OrM4aSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'video/webm' || declaredMimeType === 'audio/webm') {
+        return isValidWebmSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'audio/mpeg') {
+        return isValidMp3Signature(fileBuffer);
+    }
+    if (declaredMimeType === 'audio/wav') {
+        return isValidWavSignature(fileBuffer);
+    }
+    if (declaredMimeType === 'audio/ogg') {
+        return isValidOggSignature(fileBuffer);
+    }
+    return false;
+};
+const ensureDirectoryExists = async (directoryPath) => {
+    await fs_1.default.promises.mkdir(directoryPath, { recursive: true });
+};
+const resolveFolderByMimeType = (mimeType) => {
+    if (mimeType.startsWith('image/')) {
+        return 'images';
+    }
+    if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) {
+        return 'media';
+    }
+    if (mimeType === 'application/pdf') {
+        return 'documents';
+    }
+    throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Unsupported file type '${mimeType}'`);
+};
+const generateUniqueStorageKey = (targetFolder, rawFileExtension) => {
+    const normalizedExtension = rawFileExtension.startsWith('.')
+        ? rawFileExtension.toLowerCase()
+        : `.${rawFileExtension.toLowerCase()}`;
+    const randomIdentifier = crypto_1.default.randomUUID();
+    return `${targetFolder}/${randomIdentifier}${normalizedExtension}`;
+};
 exports.s3 = new client_s3_1.S3Client({
     region: config_1.default.r2?.accountId ? 'auto' : process.env.AWS_REGION || 'us-east-1',
     endpoint: config_1.default.r2?.s3ApiUrl
@@ -57,33 +166,40 @@ exports.s3 = new client_s3_1.S3Client({
         secretAccessKey: config_1.default.r2?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY || '',
     },
 });
-const S3Provider = {
-    upload: async (buffer, storageKey, _folder, mimeType) => {
-        const bucket = config_1.default.r2?.bucketName || process.env.AWS_S3_BUCKET || '';
-        if (!bucket) {
+const buildS3PublicUrl = (storageKey, bucketName) => {
+    if (config_1.default.r2?.customDomain) {
+        const formattedDomain = config_1.default.r2.customDomain.replace(/\/$/, '');
+        return `${formattedDomain}/${storageKey}`;
+    }
+    if (config_1.default.r2?.accountId) {
+        return `https://${config_1.default.r2.accountId}.r2.cloudflarestorage.com/${bucketName}/${storageKey}`;
+    }
+    const configuredRegion = process.env.AWS_REGION || 'us-east-1';
+    return `https://${bucketName}.s3.${configuredRegion}.amazonaws.com/${storageKey}`;
+};
+const s3StorageProvider = {
+    upload: async (fileBuffer, storageKey, _targetFolder, mimeType) => {
+        const bucketName = config_1.default.r2?.bucketName || process.env.AWS_S3_BUCKET || '';
+        if (!bucketName) {
             throw new ApiError_1.default(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR, 'AWS S3 / Cloudflare R2 Bucket configuration is missing');
         }
-        // Private bucket upload without public-read ACL
         await exports.s3.send(new client_s3_1.PutObjectCommand({
-            Bucket: bucket,
+            Bucket: bucketName,
             Key: storageKey,
-            Body: buffer,
+            Body: fileBuffer,
             ContentType: mimeType,
         }));
-        if (config_1.default.r2?.customDomain) {
-            return `${config_1.default.r2.customDomain.replace(/\/$/, '')}/${storageKey}`;
-        }
-        if (config_1.default.r2?.accountId) {
-            return `https://${config_1.default.r2.accountId}.r2.cloudflarestorage.com/${bucket}/${storageKey}`;
-        }
-        const region = process.env.AWS_REGION || 'us-east-1';
-        return `https://${bucket}.s3.${region}.amazonaws.com/${storageKey}`;
+        return buildS3PublicUrl(storageKey, bucketName);
     },
     delete: async (storageKey) => {
         const bucketName = config_1.default.r2?.bucketName || process.env.AWS_S3_BUCKET || '';
-        if (!bucketName)
+        if (!bucketName) {
             return;
-        await exports.s3.send(new client_s3_1.DeleteObjectCommand({ Bucket: bucketName, Key: storageKey }));
+        }
+        await exports.s3.send(new client_s3_1.DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: storageKey,
+        }));
     },
 };
 cloudinary_1.default.v2.config({
@@ -91,23 +207,25 @@ cloudinary_1.default.v2.config({
     api_key: process.env.CLOUDINARY_API_KEY || '',
     api_secret: process.env.CLOUDINARY_API_SECRET || '',
 });
-const CloudinaryProvider = {
-    upload: async (buffer, storageKey, folder, _mimeType) => {
-        const publicId = storageKey.replace(/\.[^/.]+$/, '');
-        const result = await new Promise((resolve, reject) => {
+const cloudinaryStorageProvider = {
+    upload: async (fileBuffer, storageKey, targetFolder, _mimeType) => {
+        const publicId = path_1.default.basename(storageKey).replace(/\.[^/.]+$/, '');
+        const uploadResult = await new Promise((resolve, reject) => {
             const uploadStream = cloudinary_1.default.v2.uploader.upload_stream({
-                folder,
+                folder: targetFolder,
                 resource_type: 'auto',
-                public_id: path_1.default.basename(publicId),
-            }, (err, res) => {
-                if (err || !res)
-                    reject(err || new Error('Upload failed'));
-                else
-                    resolve(res);
+                public_id: publicId,
+            }, (error, response) => {
+                if (error || !response) {
+                    reject(error || new Error('Upload failed'));
+                }
+                else {
+                    resolve(response);
+                }
             });
-            uploadStream.end(buffer);
+            uploadStream.end(fileBuffer);
         });
-        return result.secure_url;
+        return uploadResult.secure_url;
     },
     delete: async (storageKey) => {
         const publicId = storageKey.replace(/\.[^/.]+$/, '');
@@ -116,313 +234,216 @@ const CloudinaryProvider = {
         });
     },
 };
-const LocalProvider = {
-    upload: async (buffer, storageKey, _folder, _mimeType) => {
-        const filePath = path_1.default.join(process.cwd(), 'uploads', storageKey);
-        await ensureDirAsync(path_1.default.dirname(filePath));
-        await fs_1.default.promises.writeFile(filePath, buffer);
+const localStorageProvider = {
+    upload: async (fileBuffer, storageKey, _targetFolder, _mimeType) => {
+        const localDestinationPath = path_1.default.join(process.cwd(), 'uploads', storageKey);
+        const destinationDirectory = path_1.default.dirname(localDestinationPath);
+        await ensureDirectoryExists(destinationDirectory);
+        await fs_1.default.promises.writeFile(localDestinationPath, fileBuffer);
         return `/uploads/${storageKey}`;
     },
     delete: async (storageKey) => {
-        const filePath = path_1.default.join(process.cwd(), 'uploads', storageKey);
+        const localDestinationPath = path_1.default.join(process.cwd(), 'uploads', storageKey);
         try {
-            await fs_1.default.promises.unlink(filePath);
+            await fs_1.default.promises.unlink(localDestinationPath);
         }
         catch {
-            // Silently ignore if already deleted
+            return;
         }
     },
 };
 const STORAGE_PROVIDERS = {
-    s3: S3Provider,
-    cloudinary: CloudinaryProvider,
-    local: LocalProvider,
+    s3: s3StorageProvider,
+    cloudinary: cloudinaryStorageProvider,
+    local: localStorageProvider,
 };
-// ===============================
-// Helpers & Security Validators
-// ===============================
-const ensureDirAsync = async (dir) => {
-    await fs_1.default.promises.mkdir(dir, { recursive: true });
+const optimizeImageBuffer = async (rawImageBuffer, mimeType, maxWidth) => {
+    let sharpInstance = (0, sharp_1.default)(rawImageBuffer).resize({
+        width: maxWidth,
+        withoutEnlargement: true,
+    });
+    let outputMimeType = mimeType;
+    if (mimeType === 'image/png') {
+        sharpInstance = sharpInstance.png({ compressionLevel: 8, palette: true });
+    }
+    else if (mimeType === 'image/webp') {
+        sharpInstance = sharpInstance.webp({ quality: 80 });
+    }
+    else {
+        sharpInstance = sharpInstance.jpeg({ quality: 80 });
+        outputMimeType = 'image/jpeg';
+    }
+    const optimizedBuffer = await sharpInstance.toBuffer();
+    return { buffer: optimizedBuffer, mimeType: outputMimeType };
 };
-const formatBytes = (bytes) => {
-    if (!bytes || bytes <= 0)
-        return '0 B';
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    const value = bytes / Math.pow(1024, i);
-    return `${value.toFixed(2)} ${sizes[i]}`;
+const prepareFileBuffer = async (uploadedFile, storageMode, imageMaxWidth) => {
+    const fileBuffer = storageMode === 'memory'
+        ? uploadedFile.buffer
+        : await fs_1.default.promises.readFile(uploadedFile.path);
+    const isValidSignature = hasValidFileSignature(fileBuffer, uploadedFile.mimetype);
+    if (!isValidSignature) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `File content does not match declared format '${uploadedFile.mimetype}' (Signature verification failed)`);
+    }
+    const isImageFile = uploadedFile.mimetype.startsWith('image/');
+    if (isImageFile) {
+        const { buffer: optimizedBuffer, mimeType: outputMimeType } = await optimizeImageBuffer(fileBuffer, uploadedFile.mimetype, imageMaxWidth);
+        if (storageMode === 'local' && uploadedFile.path) {
+            await fs_1.default.promises.writeFile(uploadedFile.path, optimizedBuffer);
+        }
+        return { buffer: optimizedBuffer, mimeType: outputMimeType };
+    }
+    return { buffer: fileBuffer, mimeType: uploadedFile.mimetype };
 };
-const parseJsonData = (body) => {
-    if (body &&
-        typeof body === 'object' &&
-        'data' in body &&
-        typeof body.data === 'string') {
+const createMulterStorageEngine = (storageMode) => {
+    if (storageMode === 'memory') {
+        return multer_1.default.memoryStorage();
+    }
+    const baseUploadDirectory = path_1.default.join(process.cwd(), 'uploads');
+    ensureDirectoryExists(path_1.default.join(baseUploadDirectory, 'images')).catch(() => { });
+    ensureDirectoryExists(path_1.default.join(baseUploadDirectory, 'media')).catch(() => { });
+    ensureDirectoryExists(path_1.default.join(baseUploadDirectory, 'documents')).catch(() => { });
+    return multer_1.default.diskStorage({
+        destination: (_req, file, callback) => {
+            const canonicalFolder = resolveFolderByMimeType(file.mimetype);
+            const destinationFolder = path_1.default.join(baseUploadDirectory, canonicalFolder);
+            callback(null, destinationFolder);
+        },
+        filename: (_req, file, callback) => {
+            const extension = path_1.default.extname(file.originalname).toLowerCase();
+            const uniqueFilename = `${crypto_1.default.randomUUID()}${extension}`;
+            callback(null, uniqueFilename);
+        },
+    });
+};
+const validateIncomingFile = (_req, file, callback) => {
+    let targetFolder;
+    try {
+        targetFolder = resolveFolderByMimeType(file.mimetype);
+    }
+    catch (error) {
+        const errorMessage = error.message || 'Unsupported file type';
+        return callback(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, errorMessage));
+    }
+    const allowedMimeTypes = ALLOWED_MIME_TYPES_BY_FOLDER[targetFolder];
+    const isMimeTypePermitted = allowedMimeTypes?.includes(file.mimetype);
+    if (!isMimeTypePermitted) {
+        const permittedMimesList = allowedMimeTypes?.join(', ') || 'none';
+        return callback(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Invalid MIME type '${file.mimetype}'. Allowed for ${targetFolder}: ${permittedMimesList}`));
+    }
+    const fileExtension = path_1.default.extname(file.originalname).toLowerCase();
+    const allowedExtensions = ALLOWED_EXTENSIONS_BY_FOLDER[targetFolder];
+    const isExtensionPermitted = allowedExtensions?.includes(fileExtension);
+    if (!isExtensionPermitted) {
+        const permittedExtensionsList = allowedExtensions.join(', ');
+        return callback(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Invalid file extension '${fileExtension}'. Allowed for ${targetFolder}: ${permittedExtensionsList}`));
+    }
+    callback(null, true);
+};
+const extractJsonPayloadFromBody = (requestBody) => {
+    const hasStringifiedDataField = Boolean(requestBody) &&
+        typeof requestBody === 'object' &&
+        'data' in requestBody &&
+        typeof requestBody.data === 'string';
+    if (hasStringifiedDataField) {
         try {
-            return JSON.parse(body.data);
+            return JSON.parse(requestBody.data);
         }
         catch {
             throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid JSON format in "data" field');
         }
     }
-    return body || {};
+    return requestBody || {};
 };
-const getFolderByMime = (mime) => {
-    if (mime.startsWith('image/'))
-        return 'images';
-    if (mime.startsWith('video/') || mime.startsWith('audio/'))
-        return 'media';
-    if (mime === 'application/pdf')
-        return 'documents';
-    throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Unsupported file type '${mime}'`);
-};
-// Cryptographically secure, path-traversal immune server-generated storage key
-const generateStorageKey = (folder, ext) => {
-    const normalizedExt = ext.startsWith('.')
-        ? ext.toLowerCase()
-        : `.${ext.toLowerCase()}`;
-    const uniqueId = crypto_1.default.randomUUID();
-    return `${folder}/${uniqueId}${normalizedExt}`;
-};
-/**
- * Multi-layer Content Signature (Magic Byte) Inspection
- * Verifies container headers against the declared MIME type
- */
-const verifyMagicBytes = (buffer, mime) => {
-    if (buffer.length < 4)
-        return false;
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (mime === 'image/png') {
-        return (buffer.length >= 8 &&
-            buffer[0] === 0x89 &&
-            buffer[1] === 0x50 &&
-            buffer[2] === 0x4e &&
-            buffer[3] === 0x47 &&
-            buffer[4] === 0x0d &&
-            buffer[5] === 0x0a &&
-            buffer[6] === 0x1a &&
-            buffer[7] === 0x0a);
-    }
-    // JPEG: FF D8 FF
-    if (mime === 'image/jpeg' || mime === 'image/jpg') {
-        return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-    }
-    // WebP: RIFF (bytes 0-3) + WEBP (bytes 8-11)
-    if (mime === 'image/webp') {
-        if (buffer.length < 12)
-            return false;
-        const isRiff = buffer.toString('ascii', 0, 4) === 'RIFF';
-        const isWebp = buffer.toString('ascii', 8, 12) === 'WEBP';
-        return isRiff && isWebp;
-    }
-    // PDF: %PDF- (25 50 44 46)
-    if (mime === 'application/pdf') {
-        return buffer.toString('ascii', 0, 5).startsWith('%PDF-');
-    }
-    // MP4 / M4A: ftyp at bytes 4..8
-    if (mime === 'video/mp4' || mime === 'audio/mp4') {
-        if (buffer.length < 8)
-            return false;
-        return buffer.toString('ascii', 4, 8) === 'ftyp';
-    }
-    // WebM / EBML: 1A 45 DF A3
-    if (mime === 'video/webm' || mime === 'audio/webm') {
-        return (buffer[0] === 0x1a &&
-            buffer[1] === 0x45 &&
-            buffer[2] === 0xdf &&
-            buffer[3] === 0xa3);
-    }
-    // MP3: ID3 header or sync frame (FF FB / FF FA / FF F3 / FF F2)
-    if (mime === 'audio/mpeg') {
-        const isId3 = buffer.toString('ascii', 0, 3) === 'ID3';
-        const isSync = buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0;
-        return isId3 || isSync;
-    }
-    // WAV: RIFF (0..4) + WAVE (8..12)
-    if (mime === 'audio/wav') {
-        if (buffer.length < 12)
-            return false;
-        return (buffer.toString('ascii', 0, 4) === 'RIFF' &&
-            buffer.toString('ascii', 8, 12) === 'WAVE');
-    }
-    // OGG: OggS (4F 67 67 53)
-    if (mime === 'audio/ogg') {
-        return buffer.toString('ascii', 0, 4) === 'OggS';
-    }
-    return false;
-};
-// ===============================
-// Multer Storage & Filtering
-// ===============================
-const createStorage = (mode) => {
-    if (mode === 'memory')
-        return multer_1.default.memoryStorage();
-    const baseUploadDir = path_1.default.join(process.cwd(), 'uploads');
-    // Initialize directories asynchronously in background
-    ensureDirAsync(path_1.default.join(baseUploadDir, 'images')).catch(() => { });
-    ensureDirAsync(path_1.default.join(baseUploadDir, 'media')).catch(() => { });
-    ensureDirAsync(path_1.default.join(baseUploadDir, 'documents')).catch(() => { });
-    return multer_1.default.diskStorage({
-        destination: (_req, file, cb) => {
-            const canonicalFolder = getFolderByMime(file.mimetype);
-            const folderPath = path_1.default.join(baseUploadDir, canonicalFolder);
-            cb(null, folderPath);
-        },
-        filename: (_req, file, cb) => {
-            // Server-generated random filename prevents path traversal
-            const ext = path_1.default.extname(file.originalname).toLowerCase();
-            cb(null, `${crypto_1.default.randomUUID()}${ext}`);
-        },
-    });
-};
-const fileFilter = (_req, file, cb) => {
-    let folder;
-    try {
-        folder = getFolderByMime(file.mimetype);
-    }
-    catch (e) {
-        const msg = e.message || 'Unsupported file type';
-        return cb(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, msg));
-    }
-    // 1. MIME Validation
-    if (!allowedTypes[folder]?.includes(file.mimetype)) {
-        return cb(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Invalid MIME type '${file.mimetype}'. Allowed for ${folder}: ${allowedTypes[folder]?.join(', ') || 'none'}`));
-    }
-    // 2. Extension Sanity Validation
-    const ext = path_1.default.extname(file.originalname).toLowerCase();
-    if (!ALLOWED_EXTENSIONS[folder]?.includes(ext)) {
-        return cb(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Invalid file extension '${ext}'. Allowed for ${folder}: ${ALLOWED_EXTENSIONS[folder].join(', ')}`));
-    }
-    cb(null, true);
-};
-// ===============================
-// Format-Specific Processing Pipeline
-// ===============================
-const processFileContent = async (file, storageMode, maxWidth = 800) => {
-    let rawBuffer;
-    if (storageMode === 'memory') {
-        rawBuffer = file.buffer;
-    }
-    else {
-        rawBuffer = await fs_1.default.promises.readFile(file.path);
-    }
-    // 1. Multi-layer Magic-Byte Validation
-    const isValidSignature = verifyMagicBytes(rawBuffer, file.mimetype);
-    if (!isValidSignature) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `File content does not match declared format '${file.mimetype}' (Signature verification failed)`);
-    }
-    // 2. Format-Specific Handling: Sharp is STRICTLY for Images
-    const isImage = file.mimetype.startsWith('image/');
-    if (isImage) {
-        let sharpInstance = (0, sharp_1.default)(rawBuffer).resize({
-            width: maxWidth,
-            withoutEnlargement: true,
-        });
-        let targetMime = file.mimetype;
-        if (file.mimetype === 'image/png') {
-            sharpInstance = sharpInstance.png({ compressionLevel: 8, palette: true });
-        }
-        else if (file.mimetype === 'image/webp') {
-            sharpInstance = sharpInstance.webp({ quality: 80 });
-        }
-        else {
-            sharpInstance = sharpInstance.jpeg({ quality: 80 });
-            targetMime = 'image/jpeg';
-        }
-        const optimizedBuffer = await sharpInstance.toBuffer();
-        if (storageMode === 'local' && file.path) {
-            await fs_1.default.promises.writeFile(file.path, optimizedBuffer);
-        }
-        return { buffer: optimizedBuffer, mimeType: targetMime };
-    }
-    // 3. Documents (PDF) & Media: Direct clean passthrough
-    return { buffer: rawBuffer, mimeType: file.mimetype };
-};
-// ===============================
-// Field Policy & Normalization
-// ===============================
-const groupFilesByField = (files) => {
-    const byField = {};
+const groupUploadedFilesByField = (files) => {
+    const filesByField = {};
     if (Array.isArray(files)) {
-        for (const f of files) {
-            byField[f.fieldname] = byField[f.fieldname] || [];
-            byField[f.fieldname].push(f);
+        for (const file of files) {
+            filesByField[file.fieldname] = filesByField[file.fieldname] || [];
+            filesByField[file.fieldname].push(file);
         }
     }
     else {
-        Object.assign(byField, files);
+        Object.assign(filesByField, files);
     }
-    return byField;
+    return filesByField;
 };
-const enforceFieldPolicy = (filesByField, opts) => {
-    if (!opts.enforceAllowedFields || opts.enforceAllowedFields.length === 0)
+const extractBaseFieldName = (fieldName) => {
+    if (fieldName.includes('[')) {
+        return fieldName.split('[')[0];
+    }
+    if (fieldName.includes('.')) {
+        const segments = fieldName.split('.');
+        return segments[segments.length - 1];
+    }
+    return fieldName;
+};
+const isFieldAllowedByPolicy = (fieldName, allowedFieldNames) => {
+    const exactMatchSet = new Set(allowedFieldNames);
+    if (exactMatchSet.has(fieldName)) {
+        return true;
+    }
+    return allowedFieldNames.some(baseField => fieldName.startsWith(`${baseField}[`) ||
+        fieldName.endsWith(`.${baseField}`));
+};
+const formatExpectedFieldsMessage = (allowedFields) => {
+    if (allowedFields.length === 1) {
+        return `'${allowedFields[0]}'`;
+    }
+    return `'${allowedFields.join("', '")}'`;
+};
+const validateUploadedFieldPolicies = (filesByField, options) => {
+    const allowedFieldNames = options.enforceAllowedFields;
+    if (!allowedFieldNames || allowedFieldNames.length === 0) {
         return;
-    const allowed = new Set(opts.enforceAllowedFields);
-    for (const fieldName of Object.keys(filesByField)) {
-        let isAllowed = false;
-        if (allowed.has(fieldName)) {
-            isAllowed = true;
-        }
-        else {
-            for (const baseField of opts.enforceAllowedFields) {
-                if (fieldName.startsWith(`${baseField}[`) ||
-                    fieldName.endsWith(`.${baseField}`)) {
-                    isAllowed = true;
-                    break;
-                }
-            }
-        }
+    }
+    for (const [fieldName, fieldFiles] of Object.entries(filesByField)) {
+        const isAllowed = isFieldAllowedByPolicy(fieldName, allowedFieldNames);
         if (!isAllowed) {
-            const expected = opts.enforceAllowedFields.length === 1
-                ? `'${opts.enforceAllowedFields[0]}'`
-                : `'${opts.enforceAllowedFields.join("', '")}'`;
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Expected field name ${expected} but got '${fieldName}'`);
+            const expectedFieldsText = formatExpectedFieldsMessage(allowedFieldNames);
+            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Expected field name ${expectedFieldsText} but got '${fieldName}'`);
         }
-        let baseField = fieldName;
-        if (fieldName.includes('[')) {
-            baseField = fieldName.split('[')[0];
-        }
-        else if (fieldName.includes('.')) {
-            const parts = fieldName.split('.');
-            baseField = parts[parts.length - 1];
-        }
-        const maxCount = opts.perFieldMaxCount?.[baseField] ?? 1;
-        if (filesByField[fieldName].length > maxCount) {
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Too many files for field '${fieldName}'. Max ${maxCount}.`);
+        const baseFieldName = extractBaseFieldName(fieldName);
+        const maxFilesAllowedForField = options.perFieldMaxCount?.[baseFieldName] ?? 1;
+        if (fieldFiles.length > maxFilesAllowedForField) {
+            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Too many files for field '${fieldName}'. Max ${maxFilesAllowedForField}.`);
         }
     }
 };
-const normalizeOptions = (options) => {
-    const arrayToOptions = (arr) => {
-        const enforceAllowedFields = [];
-        const perFieldMaxCount = {};
-        let maxFilesTotal = 0;
-        for (const entry of arr) {
-            if (typeof entry === 'string') {
-                enforceAllowedFields.push(entry);
-                perFieldMaxCount[entry] = perFieldMaxCount[entry] ?? 1;
-                maxFilesTotal += 1;
-            }
-            else if (entry && typeof entry.name === 'string') {
-                enforceAllowedFields.push(entry.name);
-                perFieldMaxCount[entry.name] = entry.maxCount ?? 1;
-                maxFilesTotal += entry.maxCount ?? 1;
-            }
+const convertFieldRulesToOptions = (fieldRules) => {
+    const enforceAllowedFields = [];
+    const perFieldMaxCount = {};
+    let maxFilesTotal = 0;
+    for (const rule of fieldRules) {
+        if (typeof rule === 'string') {
+            const fieldName = rule;
+            enforceAllowedFields.push(fieldName);
+            perFieldMaxCount[fieldName] = perFieldMaxCount[fieldName] ?? 1;
+            maxFilesTotal += 1;
         }
-        return { enforceAllowedFields, perFieldMaxCount, maxFilesTotal };
-    };
-    const base = Array.isArray(options)
-        ? arrayToOptions(options)
+        else if (rule && typeof rule.name === 'string') {
+            const fieldName = rule.name;
+            const fieldMaxCount = rule.maxCount ?? 1;
+            enforceAllowedFields.push(fieldName);
+            perFieldMaxCount[fieldName] = fieldMaxCount;
+            maxFilesTotal += fieldMaxCount;
+        }
+    }
+    return { enforceAllowedFields, perFieldMaxCount, maxFilesTotal };
+};
+const resolveFileHandlerOptions = (options) => {
+    const baseOptions = Array.isArray(options)
+        ? convertFieldRulesToOptions(options)
         : options || {};
-    const storageMode = base.storageMode ||
+    const storageMode = baseOptions.storageMode ||
         (process.env.UPLOAD_MODE === 'memory' ? 'memory' : 'local');
-    const cloudProvider = base.cloudProvider ||
+    const cloudProvider = baseOptions.cloudProvider ||
         process.env.CLOUD_PROVIDER ||
         's3';
-    const maxFileSizeMB = base.maxFileSizeMB || CATEGORY_SIZE_LIMITS.documents;
-    const maxFilesTotal = base.maxFilesTotal ?? 10;
-    const imageMaxWidth = base.imageMaxWidth ?? 800;
+    const maxFileSizeMB = baseOptions.maxFileSizeMB || DEFAULT_CATEGORY_SIZE_LIMITS_MB.documents;
+    const maxFilesTotal = baseOptions.maxFilesTotal ?? 10;
+    const imageMaxWidth = baseOptions.imageMaxWidth ?? 800;
     return {
-        ...base,
+        ...baseOptions,
         storageMode,
         cloudProvider,
         maxFileSizeMB,
@@ -430,172 +451,182 @@ const normalizeOptions = (options) => {
         imageMaxWidth,
     };
 };
-// ===============================
-// Core Middleware
-// ===============================
+const resolveRequestBaseUrl = (req, customBaseUrl) => {
+    if (customBaseUrl) {
+        return customBaseUrl;
+    }
+    if (process.env.BASE_URL) {
+        return process.env.BASE_URL;
+    }
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.get('host');
+    return `${protocol}://${host}`;
+};
+const mergeUploadedUrlsIntoRequestBody = (currentRequestBody, uploadedUrlsByField) => {
+    if (Array.isArray(currentRequestBody)) {
+        return currentRequestBody.map((item, itemIndex) => {
+            const mergedItem = { ...item };
+            for (const [fieldName, urls] of Object.entries(uploadedUrlsByField)) {
+                if (Array.isArray(urls)) {
+                    mergedItem[fieldName] = urls[itemIndex];
+                }
+                else {
+                    mergedItem[fieldName] = itemIndex === 0 ? urls : undefined;
+                }
+            }
+            return mergedItem;
+        });
+    }
+    const baseObject = currentRequestBody && typeof currentRequestBody === 'object'
+        ? currentRequestBody
+        : {};
+    return { ...baseObject, ...uploadedUrlsByField };
+};
+const cleanupStagedUploads = async (stagedStorageKeys, storageProvider) => {
+    for (const storageKey of stagedStorageKeys) {
+        try {
+            await storageProvider.delete(storageKey);
+        }
+        catch {
+            continue;
+        }
+    }
+};
+const persistFileToStorage = async (storageProvider, storageMode, fileBuffer, storageKey, targetFolder, mimeType, effectiveBaseUrl) => {
+    if (storageMode === 'local') {
+        await storageProvider.upload(fileBuffer, storageKey, targetFolder, mimeType);
+        return `${effectiveBaseUrl}/uploads/${storageKey}`;
+    }
+    return await storageProvider.upload(fileBuffer, storageKey, targetFolder, mimeType);
+};
 const fileHandler = (options) => {
-    const resolved = normalizeOptions(options);
-    const providerKey = resolved.storageMode === 'local' ? 'local' : resolved.cloudProvider;
-    const provider = STORAGE_PROVIDERS[providerKey];
-    const upload = (0, multer_1.default)({
-        storage: createStorage(resolved.storageMode),
-        fileFilter,
+    const resolvedOptions = resolveFileHandlerOptions(options);
+    const activeProviderKey = resolvedOptions.storageMode === 'local'
+        ? 'local'
+        : resolvedOptions.cloudProvider;
+    const storageProvider = STORAGE_PROVIDERS[activeProviderKey];
+    const uploadMiddleware = (0, multer_1.default)({
+        storage: createMulterStorageEngine(resolvedOptions.storageMode),
+        fileFilter: validateIncomingFile,
         limits: {
-            fileSize: resolved.maxFileSizeMB * 1024 * 1024,
-            files: resolved.maxFilesTotal,
+            fileSize: resolvedOptions.maxFileSizeMB * 1024 * 1024,
+            files: resolvedOptions.maxFilesTotal,
         },
     }).any();
     return async (req, res, next) => {
-        upload(req, res, async (err) => {
-            if (err) {
-                if (err instanceof multer_1.default.MulterError) {
-                    const msg = mapMulterError(err, {
-                        maxFileSizeMB: resolved.maxFileSizeMB,
-                        maxFilesTotal: resolved.maxFilesTotal,
+        uploadMiddleware(req, res, async (uploadError) => {
+            if (uploadError) {
+                if (uploadError instanceof multer_1.default.MulterError) {
+                    const formattedMessage = mapMulterErrorMessage(uploadError, {
+                        maxFileSizeMB: resolvedOptions.maxFileSizeMB,
+                        maxFilesTotal: resolvedOptions.maxFilesTotal,
                     });
-                    return next(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, msg));
+                    return next(new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, formattedMessage));
                 }
-                return next(err);
+                return next(uploadError);
             }
-            // Track staged files for rollback in case of downstream processing errors
             const stagedStorageKeys = [];
             try {
-                const proto = req.headers['x-forwarded-proto'] || req.protocol;
-                const host = req.get('host');
-                const effectiveBaseUrl = resolved.baseUrl || process.env.BASE_URL || `${proto}://${host}`;
-                req.body = parseJsonData(req.body);
-                let filesByField = {};
+                const effectiveBaseUrl = resolveRequestBaseUrl(req, resolvedOptions.baseUrl);
+                req.body = extractJsonPayloadFromBody(req.body);
                 if (req.files) {
-                    filesByField = groupFilesByField(req.files);
-                    enforceFieldPolicy(filesByField, resolved);
-                    const processedBodyData = {};
-                    for (const [fieldName, fileArray] of Object.entries(filesByField)) {
-                        const urls = [];
-                        for (const file of fileArray) {
-                            const folder = getFolderByMime(file.mimetype);
-                            const ext = path_1.default.extname(file.originalname) || '.bin';
-                            const storageKey = generateStorageKey(folder, ext);
-                            const { buffer, mimeType } = await processFileContent(file, resolved.storageMode, resolved.imageMaxWidth);
-                            // Calculate SHA-256 Checksum
-                            const checksum = crypto_1.default
-                                .createHash('sha256')
-                                .update(buffer)
-                                .digest('hex');
-                            let uploadUrl;
-                            if (resolved.storageMode === 'local') {
-                                uploadUrl = `${effectiveBaseUrl}/uploads/${storageKey}`;
-                                await LocalProvider.upload(buffer, storageKey, folder, mimeType);
-                            }
-                            else {
-                                uploadUrl = await provider.upload(buffer, storageKey, folder, mimeType);
-                            }
+                    const filesByField = groupUploadedFilesByField(req.files);
+                    validateUploadedFieldPolicies(filesByField, resolvedOptions);
+                    const uploadedUrlsByField = {};
+                    for (const [fieldName, fieldFiles] of Object.entries(filesByField)) {
+                        const uploadedUrls = [];
+                        for (const file of fieldFiles) {
+                            const targetFolder = resolveFolderByMimeType(file.mimetype);
+                            const fileExtension = path_1.default.extname(file.originalname) || '.bin';
+                            const storageKey = generateUniqueStorageKey(targetFolder, fileExtension);
+                            const { buffer: processedBuffer, mimeType: finalMimeType } = await prepareFileBuffer(file, resolvedOptions.storageMode, resolvedOptions.imageMaxWidth);
+                            const publicAccessUrl = await persistFileToStorage(storageProvider, resolvedOptions.storageMode, processedBuffer, storageKey, targetFolder, finalMimeType, effectiveBaseUrl);
                             stagedStorageKeys.push(storageKey);
-                            urls.push(uploadUrl);
+                            uploadedUrls.push(publicAccessUrl);
                         }
-                        processedBodyData[fieldName] =
-                            fileArray.length > 1 ? urls : urls[0];
+                        uploadedUrlsByField[fieldName] =
+                            fieldFiles.length > 1 ? uploadedUrls : uploadedUrls[0];
                     }
-                    if (Array.isArray(req.body)) {
-                        req.body = req.body.map((item, index) => {
-                            const newItem = { ...item };
-                            for (const [key, val] of Object.entries(processedBodyData)) {
-                                if (Array.isArray(val)) {
-                                    newItem[key] = val[index];
-                                }
-                                else {
-                                    newItem[key] = index === 0 ? val : undefined;
-                                }
-                            }
-                            return newItem;
-                        });
-                    }
-                    else {
-                        req.body = { ...req.body, ...processedBodyData };
-                    }
+                    req.body = mergeUploadedUrlsIntoRequestBody(req.body, uploadedUrlsByField);
                 }
                 next();
             }
-            catch (error) {
-                // Automatic cleanup of staged uploads if an error occurs within middleware
-                for (const key of stagedStorageKeys) {
-                    try {
-                        await provider.delete(key);
-                    }
-                    catch {
-                        // Silently ignore cleanup failures
-                    }
-                }
-                next(error);
+            catch (processingError) {
+                await cleanupStagedUploads(stagedStorageKeys, storageProvider);
+                next(processingError);
             }
         });
     };
 };
 exports.fileHandler = fileHandler;
-// ===============================
-// Safe File Deletion Utility
-// ===============================
-/**
- * Deletes a file using its canonical storageKey or legacy full URL
- */
-const deleteFile = async (target, options) => {
-    if (!target)
-        return;
-    const providerName = options?.provider ||
-        process.env.CLOUD_PROVIDER ||
-        's3';
-    const provider = STORAGE_PROVIDERS[providerName];
-    let storageKey = target;
-    // Safe extraction for legacy URLs with domain/bucket validation
-    if (target.startsWith('http://') || target.startsWith('https://')) {
+const extractStorageKeyFromTarget = (targetPathOrUrl) => {
+    const isHttpUrl = targetPathOrUrl.startsWith('http://') ||
+        targetPathOrUrl.startsWith('https://');
+    if (isHttpUrl) {
         try {
-            const url = new URL(target);
-            const pathname = url.pathname.replace(/^\/+/, '');
-            const bucketName = config_1.default.r2?.bucketName || process.env.AWS_S3_BUCKET || '';
-            const customDomain = config_1.default.r2?.customDomain
+            const parsedUrl = new URL(targetPathOrUrl);
+            const pathnameWithoutLeadingSlash = parsedUrl.pathname.replace(/^\/+/, '');
+            const configuredBucketName = config_1.default.r2?.bucketName || process.env.AWS_S3_BUCKET || '';
+            const configuredCustomDomain = config_1.default.r2?.customDomain
                 ? config_1.default.r2.customDomain
                     .replace(/^https?:\/\//, '')
                     .replace(/\/$/, '')
                 : '';
-            if (customDomain && target.includes(customDomain)) {
-                storageKey = pathname;
+            const matchesCustomDomain = configuredCustomDomain &&
+                targetPathOrUrl.includes(configuredCustomDomain);
+            if (matchesCustomDomain) {
+                return pathnameWithoutLeadingSlash;
             }
-            else if (bucketName && pathname.startsWith(`${bucketName}/`)) {
-                storageKey = pathname.slice(bucketName.length + 1);
+            const startsWithBucketName = configuredBucketName &&
+                pathnameWithoutLeadingSlash.startsWith(`${configuredBucketName}/`);
+            if (startsWithBucketName) {
+                return pathnameWithoutLeadingSlash.slice(configuredBucketName.length + 1);
             }
-            else if (pathname.includes('/uploads/')) {
-                storageKey = pathname.split('/uploads/')[1] || pathname;
+            const containsLocalUploadsSegment = pathnameWithoutLeadingSlash.includes('/uploads/');
+            if (containsLocalUploadsSegment) {
+                return (pathnameWithoutLeadingSlash.split('/uploads/')[1] ||
+                    pathnameWithoutLeadingSlash);
             }
-            else {
-                storageKey = pathname;
-            }
+            return pathnameWithoutLeadingSlash;
         }
         catch {
-            storageKey = target.replace(/^https?:\/\/[^/]+\//, '');
+            return targetPathOrUrl.replace(/^https?:\/\/[^/]+\//, '');
         }
     }
-    else if (target.startsWith('/uploads/')) {
-        storageKey = target.replace(/^\/uploads\//, '');
+    const isLocalUploadsPath = targetPathOrUrl.startsWith('/uploads/');
+    if (isLocalUploadsPath) {
+        return targetPathOrUrl.replace(/^\/uploads\//, '');
     }
-    await provider.delete(storageKey);
+    return targetPathOrUrl;
+};
+const deleteFile = async (target, options) => {
+    if (!target) {
+        return;
+    }
+    const providerName = options?.provider ||
+        process.env.CLOUD_PROVIDER ||
+        's3';
+    const storageProvider = STORAGE_PROVIDERS[providerName];
+    const storageKey = extractStorageKeyFromTarget(target);
+    await storageProvider.delete(storageKey);
 };
 exports.deleteFile = deleteFile;
-// ===============================
-// Multer Error Mapper
-// ===============================
-const mapMulterError = (err, opts) => {
-    const field = err.field;
-    switch (err.code) {
+const mapMulterErrorMessage = (multerError, limits) => {
+    const fieldName = multerError.field;
+    const fieldSuffix = fieldName ? ` for field '${fieldName}'` : '';
+    switch (multerError.code) {
         case 'LIMIT_FILE_SIZE': {
-            const sizeText = opts?.maxFileSizeMB
-                ? `Max ${opts.maxFileSizeMB} MB`
+            const maxAllowedSizeText = limits?.maxFileSizeMB
+                ? `Max ${limits.maxFileSizeMB} MB`
                 : 'File size limit exceeded';
-            return `File too large${field ? ` for field '${field}'` : ''}. ${sizeText}.`;
+            return `File too large${fieldSuffix}. ${maxAllowedSizeText}.`;
         }
         case 'LIMIT_FILE_COUNT': {
-            return `Too many files uploaded. Max total files: ${opts?.maxFilesTotal ?? 'limit'}.`;
+            const maxAllowedFilesText = limits?.maxFilesTotal ?? 'limit';
+            return `Too many files uploaded. Max total files: ${maxAllowedFilesText}.`;
         }
         case 'LIMIT_UNEXPECTED_FILE': {
-            return `Unexpected file field${field ? ` '${field}'` : ''}.`;
+            return `Unexpected file field${fieldName ? ` '${fieldName}'` : ''}.`;
         }
         case 'LIMIT_PART_COUNT': {
             return 'Too many parts in form-data. Reduce number of files or fields.';
@@ -609,8 +640,11 @@ const mapMulterError = (err, opts) => {
         case 'LIMIT_FIELD_COUNT': {
             return 'Too many non-file fields.';
         }
-        default:
-            return `${err.message || 'Upload error'}${err.code ? ` (${err.code})` : ''}`;
+        default: {
+            const fallbackMessage = multerError.message || 'Upload error';
+            const errorCodeSuffix = multerError.code ? ` (${multerError.code})` : '';
+            return `${fallbackMessage}${errorCodeSuffix}`;
+        }
     }
 };
 //# sourceMappingURL=fileHandler.js.map

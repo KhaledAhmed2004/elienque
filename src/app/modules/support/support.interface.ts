@@ -1,18 +1,6 @@
-import { Model, Types } from 'mongoose';
+import { SupportTicket, SupportMessage } from '@prisma/client';
 
-export type ISupportMessage = {
-  sender: Types.ObjectId;
-  message: string;
-  createdAt?: Date;
+export type ISupportMessage = SupportMessage;
+export type ISupport = SupportTicket & {
+  messages?: SupportMessage[];
 };
-
-export type ISupport = {
-  subject: string;
-  user: Types.ObjectId;
-  messages: ISupportMessage[];
-  chat?: Types.ObjectId | { _id: Types.ObjectId };
-  createdAt?: Date;
-  updatedAt?: Date;
-};
-
-export type SupportModel = Model<ISupport>;

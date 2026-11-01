@@ -1,33 +1,34 @@
 import { StatusCodes } from 'http-status-codes';
-import { Types } from 'mongoose';
 import ApiError from '../../../errors/ApiError';
-import CursorQueryBuilder from '../../builder/CursorQueryBuilder';
-import { Message } from './message.model';
+import { prisma } from '../../../shared/prisma';
+import { PrismaQueryBuilder } from '../../builder';
 import { IMessage, ISendMessagePayload } from './message.interface';
-import { Chat } from '../chat/chat.model';
 import { NotificationBuilder } from '../../../helpers/notification';
-import { User } from '../user/user.model';
 
 const sendMessage = async (
   chatId: string,
   senderId: string,
   payload: ISendMessagePayload,
 ): Promise<IMessage> => {
-  const chat = await Chat.findOne({
-    _id: chatId,
-    participants: senderId,
-  }).lean();
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    include: {
+      participants: true,
+    },
+  });
 
-  if (!chat) {
+  if (!chat || !chat.participants.some(p => p.userId === senderId)) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Chat not found');
   }
 
   // If replying to a specific message, ensure the target message exists within the same chat
   if (payload.replyTo) {
-    const referencedMessage = await Message.findOne({
-      _id: payload.replyTo,
-      chatId: new Types.ObjectId(chatId),
-    }).lean();
+    const referencedMessage = await prisma.message.findFirst({
+      where: {
+        id: payload.replyTo,
+        chatId,
+      },
+    });
 
     if (!referencedMessage) {
       throw new ApiError(
@@ -49,13 +50,23 @@ const sendMessage = async (
       : [rawAttachments]
     : [];
 
-  const message = await Message.create({ 
-    chatId: new Types.ObjectId(chatId),
-    sender: new Types.ObjectId(senderId),
-    text: payload.text,
-    attachments: normalizedAttachments,
-    replyTo: payload.replyTo ? new Types.ObjectId(payload.replyTo) : null,
-    readBy: [new Types.ObjectId(senderId)],
+  const message = await prisma.message.create({
+    data: {
+      chatId,
+      senderId,
+      text: payload.text,
+      attachments: normalizedAttachments,
+      replyToId: payload.replyTo || null,
+      readByIds: [senderId],
+    },
+    include: {
+      sender: { select: { id: true, name: true, email: true } },
+      replyTo: {
+        include: {
+          sender: { select: { id: true, name: true } },
+        },
+      },
+    },
   });
 
   let preview = (payload.text || '').trim().substring(0, 100);
@@ -63,30 +74,28 @@ const sendMessage = async (
     preview = 'Attachment';
   }
 
-
-  await Chat.findByIdAndUpdate(chatId, {
-    lastMessage: preview,
-    lastMessageAt: message.createdAt,
+  await prisma.chat.update({
+    where: { id: chatId },
+    data: {
+      lastMessage: preview,
+      lastMessageAt: message.createdAt,
+    },
   });
 
-  const recipientId = chat.participants
-    .map(p => p.toString())
-    .find(id => id !== senderId);
+  const recipient = chat.participants.find(p => p.userId !== senderId);
 
-  if (recipientId) {
-    const sender = await User.findById(senderId).select('name profilePicture').lean();
-
+  if (recipient) {
     const previewText = preview.substring(0, 80);
     new NotificationBuilder()
-      .to(recipientId)
+      .to(recipient.userId)
       .useTemplate('newMessage', {
         senderId: String(senderId),
-        senderName: sender?.name || 'Someone',
-        senderAvatar: sender?.profilePicture || '',
+        senderName: message.sender?.name || 'Someone',
+        senderAvatar: '',
         messagePreview: previewText,
         preview: previewText,
         chatId,
-        messageId: String(message._id),
+        messageId: message.id,
       })
       .viaPush()
       .viaSocket()
@@ -94,21 +103,11 @@ const sendMessage = async (
       .send()
       .catch(() => {});
 
-    const io = global.io;
+    const io = (global as any).io;
     if (io) {
-
-      const populatedMessage = await Message.findById(message._id)
-        .populate('sender', 'name profilePicture')
-        .populate({
-          path: 'replyTo',
-          select: 'text attachments sender createdAt',
-          populate: { path: 'sender', select: 'name profilePicture' },
-        })
-        .lean();
-
-      io.to(`user::${recipientId}`).emit('NEW_MESSAGE', {
+      io.to(`user::${recipient.userId}`).emit('NEW_MESSAGE', {
         chatId,
-        message: populatedMessage,
+        message,
       });
     }
   }
@@ -121,40 +120,43 @@ const getMessages = async (
   userId: string,
   query: Record<string, unknown>,
 ) => {
-  const chatExists = await Chat.exists({ _id: chatId, participants: userId });
-  if (!chatExists) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'You are not a participant of this chat');
+  const isParticipant = await prisma.chatParticipant.findFirst({
+    where: { chatId, userId },
+  });
+
+  if (!isParticipant) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      'You are not a participant of this chat',
+    );
   }
 
-  const result = await new CursorQueryBuilder<IMessage>(
-    Message.find({ chatId: new Types.ObjectId(chatId) }),
-    query,
-    { defaultLimit: 20, maxLimit: 100 },
-  )
-    .cursor('_id', 'desc')
+  const qb = new PrismaQueryBuilder(prisma.message, query, 'Message')
+    .where({ chatId })
     .search(['text'])
-    .populate([
-      { path: 'sender', select: 'name profilePicture' },
-      {
-        path: 'replyTo',
-        select: 'text attachments sender createdAt',
-        populate: { path: 'sender', select: 'name profilePicture' },
+    .cursorPaginate('id', 'desc', 20, 100)
+    .include({
+      sender: { select: { id: true, name: true, email: true } },
+      replyTo: {
+        include: {
+          sender: { select: { id: true, name: true } },
+        },
       },
-    ])
-    .execute();
+    });
 
-  // Bounded read-marker: Mark only the returned page of messages as read
-  const returnedIds = result.data.map(m => m._id);
-  if (returnedIds.length > 0) {
-    await Message.updateMany(
-      {
-        _id: { $in: returnedIds },
-        readBy: { $ne: new Types.ObjectId(userId) },
-      },
-      {
-        $addToSet: { readBy: new Types.ObjectId(userId) },
-      },
-    );
+  const result = await qb.executeCursor();
+
+  // Mark unread messages as read
+  const unreadIds = result.data
+    .filter((m: any) => !m.readByIds?.includes(userId))
+    .map((m: any) => m.id);
+
+  if (unreadIds.length > 0) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Message" SET "readByIds" = array_append("readByIds", $1) WHERE "id" = ANY($2::uuid[])`,
+      userId,
+      unreadIds,
+    ).catch(() => {});
   }
 
   return {
@@ -164,4 +166,3 @@ const getMessages = async (
 };
 
 export const MessageService = { sendMessage, getMessages };
-

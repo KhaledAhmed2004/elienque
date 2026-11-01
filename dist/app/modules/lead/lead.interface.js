@@ -4,6 +4,7 @@ exports.LeadStatus = void 0;
 var LeadStatus;
 (function (LeadStatus) {
     LeadStatus["PENDING"] = "PENDING";
+    LeadStatus["IN_PROGRESS"] = "IN_PROGRESS";
     LeadStatus["APPROVED"] = "APPROVED";
     LeadStatus["REJECTED"] = "REJECTED";
 })(LeadStatus || (exports.LeadStatus = LeadStatus = {}));

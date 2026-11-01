@@ -26,10 +26,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const mongoose_1 = __importDefault(require("mongoose"));
 const socket_io_1 = require("socket.io");
 const app_1 = __importDefault(require("./app"));
 const config_1 = __importDefault(require("./config"));
+const prisma_1 = require("./shared/prisma");
 const corsLogger_1 = require("./app/logging/corsLogger");
 const seedAdmin_1 = require("./DB/seedAdmin");
 const socketHelper_1 = require("./helpers/socketHelper");
@@ -37,7 +37,6 @@ const logger_1 = require("./shared/logger");
 const CacheHelper_1 = require("./app/shared/CacheHelper");
 const startupSummary_1 = require("./shared/startupSummary");
 const spinnerHelper_1 = require("./shared/spinnerHelper");
-const outboxWorker_1 = require("./app/modules/emailOutbox/outboxWorker");
 let server;
 setupGlobalErrorHandlers();
 async function main() {
@@ -100,30 +99,36 @@ function getInitialStartupStatus() {
     };
 }
 async function connectToDatabase(startupStatus) {
-    const dbSpinner = (0, spinnerHelper_1.createSpinner)({
-        text: 'Connecting to MongoDB...',
+    const prismaSpinner = (0, spinnerHelper_1.createSpinner)({
+        text: 'Connecting to PostgreSQL via Prisma...',
         color: 'cyan',
     });
     try {
-        await mongoose_1.default.connect(config_1.default.database_url);
-        dbSpinner.succeed('MongoDB connected successfully');
+        await prisma_1.prisma.$connect();
+        prismaSpinner.succeed('PostgreSQL (Prisma) connected successfully');
         startupStatus.database = {
             status: 'connected',
-            message: 'MongoDB connected successfully',
+            message: 'PostgreSQL (Prisma) connected successfully',
         };
     }
-    catch (dbError) {
-        dbSpinner.fail('MongoDB connection failed');
-        throw dbError;
+    catch (prismaError) {
+        prismaSpinner.fail('PostgreSQL (Prisma) connection failed');
+        throw prismaError;
     }
 }
 async function seedSystemData() {
     const seedSpinner = (0, spinnerHelper_1.createSpinner)({
-        text: 'Verifying super admin account & system seeds...',
+        text: 'Verifying admin account & system seeds...',
         color: 'cyan',
     });
-    await (0, seedAdmin_1.seedSuperAdmin)();
-    seedSpinner.succeed('Super admin & system seeds ready');
+    try {
+        await (0, seedAdmin_1.seedAdmin)();
+        seedSpinner.succeed('Admin & system seeds ready');
+    }
+    catch (err) {
+        seedSpinner.fail('Seed verification failed');
+        logger_1.logger.error('Seed verification error:', err);
+    }
 }
 function initializeCache(startupStatus) {
     const cacheSpinner = (0, spinnerHelper_1.createSpinner)({
@@ -171,7 +176,6 @@ function startServer(port, host, startupStatus) {
         serverSpinner.succeed(`Server is listening at ${url}`);
         startupStatus.server = { url, host, port };
         setupSocketIO(startupStatus);
-        (0, outboxWorker_1.startOutboxWorker)(5000);
         printStartupSummary(startupStatus);
     });
     setupPortRetryLogic(port, host);

@@ -12,7 +12,8 @@ router.get(
   '/:chatId',
   auth(
     USER_ROLES.ADMIN,
-    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    USER_ROLES.OPERATOR,
+    USER_ROLES.USER,
     { allowRestricted: true },
   ),
   validateRequest(MessageValidation.getMessagesZodSchema),
@@ -24,7 +25,8 @@ router.post(
   '/:chatId',
   auth(
     USER_ROLES.ADMIN,
-    USER_ROLES.PROMOTER, USER_ROLES.BUSINESS_OWNER,
+    USER_ROLES.OPERATOR,
+    USER_ROLES.USER,
     { allowRestricted: true },
   ),
   fileHandler([

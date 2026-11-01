@@ -8,3 +8,8 @@ node_modules
 keys/
 certs/
 *.p8
+reports/
+dist/
+
+# Snaplet auto-generated seed client
+.snaplet/

@@ -10,7 +10,7 @@
  */
 
 import { Types } from 'mongoose';
-import { User } from '../../app/modules/user/user.model';
+import { prisma } from '../../shared/prisma';
 import * as templates from './templates';
 import { sendPush } from './channels/push.channel';
 import { sendSocket } from './channels/socket.channel';
@@ -354,22 +354,40 @@ export class NotificationBuilder {
   }
 
   private async resolveUsers(): Promise<INotificationRecipient[]> {
-    const query: any = {};
+    const where: any = {};
 
     if (this.targetRole) {
-      query.role = this.targetRole;
-    } else if (this.userIds.length > 0) {
-      query._id = { $in: this.userIds };
-    } else {
+      where.role = this.targetRole;
+    }
+
+    if (this.userIds.length > 0) {
+      where.id = { in: this.userIds };
+    } else if (!this.targetRole) {
       return [];
     }
 
     if (this.excludeIds.length > 0) {
-      query._id = { ...query._id, $nin: this.excludeIds };
+      where.id = { ...(where.id || {}), notIn: this.excludeIds };
     }
 
-    const users = await User.find(query).select('_id email deviceTokens role name').lean();
-    return users as INotificationRecipient[];
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        name: true,
+      },
+    });
+
+    return users.map(user => ({
+      _id: user.id,
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      deviceTokens: [],
+    })) as INotificationRecipient[];
   }
 
   private resolveContent(): {
@@ -477,8 +495,11 @@ export class NotificationBuilder {
     let recipientIds: string[] = [];
 
     if (this.targetRole) {
-      const users = await User.find({ role: this.targetRole }).select('_id').lean();
-      recipientIds = users.map((u: any) => u._id.toString());
+      const users = await prisma.user.findMany({
+        where: { role: this.targetRole as any },
+        select: { id: true },
+      });
+      recipientIds = users.map(u => u.id);
     } else {
       recipientIds = this.userIds;
     }

@@ -3,27 +3,36 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedSuperAdmin = void 0;
-const user_model_1 = require("../app/modules/user/user.model");
+exports.seedAdmin = void 0;
 const config_1 = __importDefault(require("../config"));
-const user_1 = require("../enums/user");
+const client_1 = require("@prisma/client");
 const logger_1 = require("../shared/logger");
-const payload = {
-    name: 'Administrator',
-    email: config_1.default.super_admin.email,
-    role: user_1.USER_ROLES.ADMIN,
-    password: config_1.default.super_admin.password,
-    accountState: user_1.ACCOUNT_STATE.VERIFIED,
-};
-const seedSuperAdmin = async () => {
-    const isExistSuperAdmin = await user_model_1.User.findOne({
-        email: config_1.default.super_admin.email,
-        role: user_1.USER_ROLES.ADMIN,
+const prisma_1 = require("../shared/prisma");
+const bcrypt_1 = __importDefault(require("bcrypt"));
+const seedAdmin = async () => {
+    if (!config_1.default.admin.email || !config_1.default.admin.password)
+        return;
+    const isExistAdmin = await prisma_1.prisma.user.findFirst({
+        where: {
+            email: config_1.default.admin.email.toLowerCase().trim(),
+            role: client_1.Role.ADMIN,
+        },
     });
-    if (!isExistSuperAdmin) {
-        await user_model_1.User.create(payload);
-        logger_1.logger.info('✨ Super Admin account has been successfully created!');
+    if (!isExistAdmin) {
+        const hashedPassword = await bcrypt_1.default.hash(config_1.default.admin.password, Number(config_1.default.bcrypt_salt_rounds));
+        await prisma_1.prisma.user.create({
+            data: {
+                name: 'Administrator',
+                email: config_1.default.admin.email.toLowerCase().trim(),
+                role: client_1.Role.ADMIN,
+                passwordHash: hashedPassword,
+                status: client_1.AccountStatus.ACTIVE,
+                isEmailVerified: true,
+                isRootAdmin: true,
+            },
+        });
+        logger_1.logger.info('✨ Admin account has been successfully created!');
     }
 };
-exports.seedSuperAdmin = seedSuperAdmin;
+exports.seedAdmin = seedAdmin;
 //# sourceMappingURL=seedAdmin.js.map

@@ -12,8 +12,8 @@ const colors_1 = __importDefault(require("colors"));
 const config_1 = __importDefault(require("../../config"));
 const captureUtils_1 = require("./captureUtils");
 const captureConfig_1 = require("./captureConfig");
-// Validate: mongooseMetrics must be loaded first
-loadOrderValidator_1.LoadOrderValidator.validate('AUTO_LABEL', ['MONGOOSE_METRICS'], 'autoLabelBootstrap.ts');
+// Validate load order
+loadOrderValidator_1.LoadOrderValidator.validate('AUTO_LABEL', [], 'autoLabelBootstrap.ts');
 // Register this module as loaded
 loadOrderValidator_1.LoadOrderValidator.markLoaded('AUTO_LABEL', 'autoLabelBootstrap.ts');
 const wrapService = (serviceName, obj) => {

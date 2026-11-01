@@ -26,6 +26,9 @@ export const EmailService = {
    * Raw send email method via nodemailer transporter
    */
   sendEmail: async (options: ISendEmailOptions): Promise<void> => {
+    if (process.env.NODE_ENV === 'test' || !config.email.host) {
+      return;
+    }
     try {
       await transporter.sendMail({
         from: `"Moeb26" <${config.email.from}>`,

@@ -8,6 +8,18 @@ import { DashboardValidation } from './dashboard.validation';
 const router = express.Router();
 
 router.get(
+  '/analytics/overview',
+  auth(USER_ROLES.ADMIN),
+  DashboardController.getAdminAnalyticsOverview,
+);
+
+router.get(
+  '/operator/overview',
+  auth(USER_ROLES.OPERATOR, USER_ROLES.ADMIN),
+  DashboardController.getOperatorOverview,
+);
+
+router.get(
   '/stats',
   auth(USER_ROLES.ADMIN),
   DashboardController.getDashboardStats,

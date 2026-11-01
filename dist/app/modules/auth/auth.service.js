@@ -7,522 +7,590 @@ exports.AuthService = void 0;
 const crypto_1 = __importDefault(require("crypto"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const http_status_codes_1 = require("http-status-codes");
-const mongoose_1 = __importDefault(require("mongoose"));
 const config_1 = __importDefault(require("../../../config"));
 const ApiError_1 = __importDefault(require("../../../errors/ApiError"));
 const jwtHelper_1 = require("../../../helpers/jwtHelper");
-const auth_constant_1 = require("./auth.constant");
-const cryptoToken_1 = __importDefault(require("../../../util/cryptoToken"));
-const generateOTP_1 = __importDefault(require("../../../util/generateOTP"));
-const resetToken_model_1 = require("./resetToken/resetToken.model");
-const user_model_1 = require("../user/user.model");
-const emailOutbox_model_1 = require("../emailOutbox/emailOutbox.model");
+const prisma_1 = require("../../../shared/prisma");
 const user_1 = require("../../../enums/user");
-const cryptoHelpers_1 = require("../../../helpers/cryptoHelpers");
-const auth_helper_1 = require("./auth.helper");
+const client_1 = require("@prisma/client");
+const session_service_1 = require("../session/session.service");
+const email_1 = require("../../../helpers/email");
+const generateNumericOtp = (length = 6) => {
+    return Array.from({ length }, () => crypto_1.default.randomInt(0, 10)).join('');
+};
+const generateSecureToken = () => {
+    return crypto_1.default.randomBytes(32).toString('hex');
+};
 const registerUser = async (payload) => {
-    const { email, phone } = payload;
-    const existingUser = await user_model_1.User.findOne({
-        $or: [{ email }, { phone }],
+    const email = payload.email.toLowerCase().trim();
+    const phone = payload.phoneNumber || payload.phone || null;
+    // 1. Check if user already exists
+    const existingUser = await prisma_1.prisma.user.findUnique({
+        where: { email },
     });
     if (existingUser) {
-        const isEmailRegistered = existingUser.email.toLowerCase() === email;
-        if (isEmailRegistered) {
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.CONFLICT, 'Email is already registered. Please login or verify your email.');
-        }
-        const isPhoneRegistered = existingUser.phone === phone;
-        if (isPhoneRegistered) {
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.CONFLICT, 'Phone number is already registered.');
-        }
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.CONFLICT, 'Email already in use');
     }
-    const session = await mongoose_1.default.startSession();
-    let registeredUserId;
-    let registeredAccountState;
+    // 2. Hash password
+    const hashedPassword = await bcrypt_1.default.hash(payload.password, Number(config_1.default.bcrypt_salt_rounds) || 12);
+    const isOperator = payload.role === client_1.Role.OPERATOR ||
+        payload.role === user_1.USER_ROLES.OPERATOR;
+    const role = isOperator ? client_1.Role.OPERATOR : client_1.Role.USER;
+    const displayName = payload.name?.trim() ||
+        payload.contactPersonName?.trim() ||
+        payload.companyName?.trim() ||
+        payload.businessName?.trim() ||
+        '';
+    // 3. Create user in database (Prisma PostgreSQL)
+    const user = await prisma_1.prisma.user.create({
+        data: {
+            name: displayName,
+            email,
+            phoneNumber: phone,
+            passwordHash: hashedPassword,
+            role,
+            status: client_1.AccountStatus.UNVERIFIED,
+            isEmailVerified: false,
+            ...(isOperator && (payload.companyName || payload.contactPersonName)
+                ? {
+                    operatorProfile: {
+                        create: {
+                            companyName: (payload.companyName || payload.businessName || displayName).trim(),
+                            contactPersonName: (payload.contactPersonName || displayName).trim(),
+                        },
+                    },
+                }
+                : {}),
+        },
+        include: {
+            operatorProfile: true,
+        },
+    });
+    // 4. Generate 6-digit numeric OTP
+    const otp = generateNumericOtp(6);
+    const tokenHash = await bcrypt_1.default.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    // 5. Store verification token
+    await prisma_1.prisma.verificationToken.create({
+        data: {
+            userId: user.id,
+            tokenHash,
+            type: client_1.TokenType.EMAIL_VERIFICATION,
+            expiresAt,
+        },
+    });
+    // 6. Send verification email via EmailService
     try {
-        await session.withTransaction(async () => {
-            const otp = (0, generateOTP_1.default)();
-            const otpHash = (0, cryptoHelpers_1.hashOtp)(String(otp));
-            const registrationAuthSession = {
-                hashedOtp: otpHash,
-                expireAt: new Date(Date.now() + auth_constant_1.OTP_EXPIRY_MS),
-                attempts: 0,
-                resendTimestamps: [new Date()],
-                purpose: 'REGISTRATION',
-            };
-            const [user] = await user_model_1.User.create([
-                {
-                    ...payload,
-                    email,
-                    phone,
-                    role: payload.role,
-                    accountState: user_1.ACCOUNT_STATE.UNVERIFIED,
-                    authentication: registrationAuthSession,
-                },
-            ], { session });
-            if (!user) {
-                throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Failed to create user');
-            }
-            registeredUserId = user._id;
-            registeredAccountState = user.accountState;
-            const emailPayload = {
-                name: user.name,
-                otp,
-                email: user.email,
-            };
-            await emailOutbox_model_1.EmailOutbox.create([
-                {
-                    to: user.email,
-                    type: 'VERIFY_EMAIL',
-                    template: 'CREATE_ACCOUNT',
-                    encryptedPayload: (0, cryptoHelpers_1.encryptPayload)(emailPayload),
-                    status: 'PENDING',
-                },
-            ], { session });
+        await email_1.EmailService.sendEmail({
+            to: user.email,
+            subject: 'Verify Your Email',
+            html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Welcome to Ferry Booking System</h2>
+          <p>Hi ${user.name || 'there'},</p>
+          <p>Your email verification OTP code is:</p>
+          <h1 style="color: #2563eb; letter-spacing: 4px;">${otp}</h1>
+          <p>This code will expire in 15 minutes.</p>
+        </div>
+      `,
         });
     }
-    finally {
-        await session.endSession();
+    catch (err) {
+        // If sending fails, log and continue so user creation doesn't fail
+        console.error('Failed to send verification email:', err);
     }
     return {
-        userId: registeredUserId,
-        accountState: registeredAccountState,
+        userId: user.id,
+        accountState: user_1.ACCOUNT_STATE.UNVERIFIED,
+        status: user.status,
+        message: 'Registration successful. Please check your email for the verification OTP.',
+    };
+};
+const verifyEmail = async (payload) => {
+    const email = payload.email.toLowerCase().trim();
+    const otpCode = String(payload.otp ?? payload.oneTimeCode ?? '').trim();
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { email },
+        include: { operatorProfile: true },
+    });
+    if (!user) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid email or OTP');
+    }
+    if (user.deletedAt) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Account has been deleted');
+    }
+    if (user.status === client_1.AccountStatus.SUSPENDED) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been suspended. Please contact support.');
+    }
+    if (user.status === client_1.AccountStatus.DEACTIVATED) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been deactivated. Please contact support.');
+    }
+    if (user.status !== client_1.AccountStatus.UNVERIFIED && user.isEmailVerified) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Email is already verified');
+    }
+    const tokenRecord = await prisma_1.prisma.verificationToken.findFirst({
+        where: {
+            userId: user.id,
+            type: client_1.TokenType.EMAIL_VERIFICATION,
+        },
+        orderBy: { createdAt: 'desc' },
+    });
+    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'OTP has expired or is invalid');
+    }
+    const isValid = await bcrypt_1.default.compare(otpCode, tokenRecord.tokenHash);
+    if (!isValid) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid email or OTP');
+    }
+    // Update user as verified and active
+    const updatedUser = await prisma_1.prisma.user.update({
+        where: { id: user.id },
+        data: {
+            status: client_1.AccountStatus.ACTIVE,
+            isEmailVerified: true,
+        },
+        include: {
+            operatorProfile: true,
+        },
+    });
+    // Delete used token
+    await prisma_1.prisma.verificationToken.delete({
+        where: { id: tokenRecord.id },
+    });
+    return {
+        message: 'Email verified successfully. You can now log in.',
+        data: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            status: updatedUser.status,
+            accountState: user_1.ACCOUNT_STATE.VERIFIED,
+            isApproved: true,
+        },
+    };
+};
+const resendVerificationEmail = async (email) => {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+    });
+    // Generic response to prevent email enumeration
+    if (!user || user.deletedAt) {
+        return {
+            message: 'If this email is registered, a new OTP has been sent.',
+        };
+    }
+    if (user.status !== client_1.AccountStatus.UNVERIFIED && user.isEmailVerified) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Email is already verified');
+    }
+    if (user.status === client_1.AccountStatus.SUSPENDED) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been suspended. Please contact support.');
+    }
+    if (user.status === client_1.AccountStatus.DEACTIVATED) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been deactivated. Please contact support.');
+    }
+    // Delete existing unused email tokens
+    await prisma_1.prisma.verificationToken.deleteMany({
+        where: {
+            userId: user.id,
+            type: client_1.TokenType.EMAIL_VERIFICATION,
+        },
+    });
+    // Generate new OTP
+    const otp = generateNumericOtp(6);
+    const tokenHash = await bcrypt_1.default.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    await prisma_1.prisma.verificationToken.create({
+        data: {
+            userId: user.id,
+            tokenHash,
+            type: client_1.TokenType.EMAIL_VERIFICATION,
+            expiresAt,
+        },
+    });
+    try {
+        await email_1.EmailService.sendEmail({
+            to: user.email,
+            subject: 'Verify Your Email',
+            html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Email Verification OTP</h2>
+          <p>Hi ${user.name || 'there'},</p>
+          <p>Your new verification OTP code is:</p>
+          <h1 style="color: #2563eb; letter-spacing: 4px;">${otp}</h1>
+          <p>This code will expire in 15 minutes.</p>
+        </div>
+      `,
+        });
+    }
+    catch (err) {
+        console.error('Failed to send resend email:', err);
+    }
+    return { message: 'If this email is registered, a new OTP has been sent.' };
+};
+const loginUser = async (payload, ipAddress, deviceInfo) => {
+    const email = payload.email.toLowerCase().trim();
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { email },
+        include: {
+            operatorProfile: true,
+        },
+    });
+    if (!user || !user.passwordHash) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Invalid credentials');
+    }
+    if (user.deletedAt) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Account has been deleted');
+    }
+    if (user.status === client_1.AccountStatus.UNVERIFIED && !user.isEmailVerified) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Please verify your email to login');
+    }
+    if (user.status === client_1.AccountStatus.SUSPENDED) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been suspended');
+    }
+    if (user.status === client_1.AccountStatus.DEACTIVATED) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account is deactivated');
+    }
+    // Check temporary or hard lockout
+    const isLocked = user.status === client_1.AccountStatus.LOCKED;
+    const isTempLocked = user.lockedUntil && user.lockedUntil > new Date();
+    if (isTempLocked || (isLocked && !user.lockedUntil)) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account is locked. Please try again later.');
+    }
+    const isPasswordValid = await bcrypt_1.default.compare(payload.password, user.passwordHash);
+    if (!isPasswordValid) {
+        const attempts = (user.failedLoginAttempts || 0) + 1;
+        if (attempts >= 5) {
+            await prisma_1.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    status: client_1.AccountStatus.LOCKED,
+                    failedLoginAttempts: attempts,
+                    lockedUntil: new Date(Date.now() + 15 * 60 * 1000), // 15 mins
+                },
+            });
+            throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Too many failed attempts. Your account has been locked for 15 minutes.');
+        }
+        else {
+            await prisma_1.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    failedLoginAttempts: attempts,
+                },
+            });
+            throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'Invalid credentials');
+        }
+    }
+    // Password is valid - reset failed attempts
+    if (user.failedLoginAttempts > 0 || user.status === client_1.AccountStatus.LOCKED || user.lockedUntil) {
+        await prisma_1.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                failedLoginAttempts: 0,
+                lockedUntil: null,
+                status: client_1.AccountStatus.ACTIVE,
+            },
+        });
+    }
+    // Create database session with refresh token
+    const { session, plainRefreshToken } = await session_service_1.SessionService.createSession(user.id, deviceInfo, ipAddress);
+    // Generate JWT access token
+    const accessToken = jwtHelper_1.jwtHelper.createToken({
+        id: user.id,
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        accountState: user.status === client_1.AccountStatus.ACTIVE ? user_1.ACCOUNT_STATE.VERIFIED : user.status,
+        sessionId: session.id,
+    }, config_1.default.jwt.jwt_secret, config_1.default.jwt.jwt_expire_in || '15m');
+    return {
+        tokens: {
+            accessToken,
+            refreshToken: plainRefreshToken,
+        },
+        sessionId: session.id,
+        isApproved: true,
+        user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            phoneNumber: user.phoneNumber,
+            phone: user.phoneNumber,
+            status: user.status,
+            accountState: user.status === client_1.AccountStatus.ACTIVE ? user_1.ACCOUNT_STATE.VERIFIED : user.status,
+            ...(user.operatorProfile ? { operatorProfile: user.operatorProfile } : {}),
+        },
+    };
+};
+const refreshToken = async (tokenOrSessionId, refreshTokenStr, ipAddress, deviceInfo) => {
+    let sessionId = tokenOrSessionId;
+    let token = refreshTokenStr || '';
+    // If only one token is provided, determine if it's a JWT or direct refresh token
+    if (!token && tokenOrSessionId) {
+        try {
+            const decoded = jwtHelper_1.jwtHelper.verifyToken(tokenOrSessionId, config_1.default.jwt.jwt_refresh_secret);
+            if (decoded?.sessionId) {
+                sessionId = decoded.sessionId;
+            }
+            token = tokenOrSessionId;
+        }
+        catch {
+            token = tokenOrSessionId;
+        }
+    }
+    if (!token) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Refresh token is required');
+    }
+    const { session, newPlainRefreshToken } = await session_service_1.SessionService.refreshSession(sessionId, token, ipAddress, deviceInfo);
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { id: session.userId },
+        include: { operatorProfile: true },
+    });
+    if (!user || user.deletedAt || user.status !== client_1.AccountStatus.ACTIVE) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'User is no longer active');
+    }
+    const accessToken = jwtHelper_1.jwtHelper.createToken({
+        id: user.id,
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        accountState: user_1.ACCOUNT_STATE.VERIFIED,
+        sessionId: session.id,
+    }, config_1.default.jwt.jwt_secret, config_1.default.jwt.jwt_expire_in || '15m');
+    return {
+        tokens: {
+            accessToken,
+            refreshToken: newPlainRefreshToken,
+        },
+        sessionId: session.id,
+    };
+};
+const logoutUser = async (user, sessionId, _deviceToken) => {
+    const currentSessionId = sessionId || user.sessionId;
+    if (currentSessionId) {
+        await session_service_1.SessionService.revokeSession(currentSessionId, session_service_1.RevocationReason.USER_LOGOUT);
+    }
+    return { message: 'User logged out successfully.' };
+};
+const logoutAll = async (userId) => {
+    await session_service_1.SessionService.revokeAllUserSessions(userId, session_service_1.RevocationReason.USER_LOGOUT_ALL);
+    return { message: 'Logged out from all devices' };
+};
+const forgotPassword = async (email) => {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+    });
+    if (!user || user.deletedAt) {
+        return {
+            message: 'If an account with this email exists, a password reset link has been sent.',
+        };
+    }
+    // Delete existing unused password tokens
+    await prisma_1.prisma.verificationToken.deleteMany({
+        where: { userId: user.id, type: client_1.TokenType.PASSWORD_RESET },
+    });
+    const resetToken = generateSecureToken();
+    const tokenHash = await bcrypt_1.default.hash(resetToken, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    await prisma_1.prisma.verificationToken.create({
+        data: {
+            userId: user.id,
+            tokenHash,
+            type: client_1.TokenType.PASSWORD_RESET,
+            expiresAt,
+        },
+    });
+    try {
+        await email_1.EmailService.sendEmail({
+            to: user.email,
+            subject: 'Password Reset Request',
+            html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Password Reset Request</h2>
+          <p>Hi ${user.name || 'there'},</p>
+          <p>You requested to reset your password. Use the following token to reset it:</p>
+          <p style="background: #f3f4f6; padding: 10px; font-family: monospace;">${resetToken}</p>
+          <p>This link/token will expire in 15 minutes.</p>
+        </div>
+      `,
+        });
+    }
+    catch (err) {
+        console.error('Failed to send reset password email:', err);
+    }
+    return {
+        message: 'If an account with this email exists, a password reset link has been sent.',
+    };
+};
+const resetPassword = async (rawToken, payload) => {
+    const token = (payload.token || rawToken || '').replace(/^Bearer\s+/i, '').trim();
+    const email = payload.email?.toLowerCase().trim();
+    let user = email ? await prisma_1.prisma.user.findUnique({ where: { email } }) : null;
+    let tokenRecord = null;
+    if (user) {
+        tokenRecord = await prisma_1.prisma.verificationToken.findFirst({
+            where: {
+                userId: user.id,
+                type: client_1.TokenType.PASSWORD_RESET,
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+    else {
+        // If email wasn't provided, search recent tokens
+        const recentTokens = await prisma_1.prisma.verificationToken.findMany({
+            where: {
+                type: client_1.TokenType.PASSWORD_RESET,
+                expiresAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        for (const t of recentTokens) {
+            if (await bcrypt_1.default.compare(token, t.tokenHash)) {
+                tokenRecord = t;
+                user = await prisma_1.prisma.user.findUnique({ where: { id: t.userId } });
+                break;
+            }
+        }
+    }
+    if (!user || !tokenRecord || tokenRecord.expiresAt < new Date()) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Token has expired or is invalid');
+    }
+    const isValid = await bcrypt_1.default.compare(token, tokenRecord.tokenHash);
+    if (!isValid) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid email or token');
+    }
+    const newPasswordHash = await bcrypt_1.default.hash(payload.newPassword, Number(config_1.default.bcrypt_salt_rounds) || 12);
+    // Update password and clear lockout
+    await prisma_1.prisma.user.update({
+        where: { id: user.id },
+        data: {
+            passwordHash: newPasswordHash,
+            lockedUntil: null,
+            failedLoginAttempts: 0,
+            status: client_1.AccountStatus.ACTIVE,
+        },
+    });
+    // Delete used token
+    await prisma_1.prisma.verificationToken.delete({
+        where: { id: tokenRecord.id },
+    });
+    // Revoke all existing sessions
+    await session_service_1.SessionService.revokeAllUserSessions(user.id, session_service_1.RevocationReason.PASSWORD_RESET);
+    return {
+        message: 'Password has been reset successfully. You can now log in.',
+    };
+};
+const changePassword = async (user, payload) => {
+    const currentPassword = payload.currentPassword || payload.oldPassword;
+    if (!currentPassword) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Current password is required');
+    }
+    const existingUser = await prisma_1.prisma.user.findUnique({
+        where: { id: user.id },
+    });
+    if (!existingUser || !existingUser.passwordHash) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'User not found');
+    }
+    const isMatch = await bcrypt_1.default.compare(currentPassword, existingUser.passwordHash);
+    if (!isMatch) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Incorrect old password');
+    }
+    if (currentPassword === payload.newPassword) {
+        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'New password must be different from current password');
+    }
+    const hashPassword = await bcrypt_1.default.hash(payload.newPassword, Number(config_1.default.bcrypt_salt_rounds) || 12);
+    await prisma_1.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: hashPassword },
+    });
+    // Revoke all other sessions after a password change to ensure security
+    await session_service_1.SessionService.revokeAllUserSessions(user.id, session_service_1.RevocationReason.PASSWORD_CHANGED);
+    return {
+        message: 'Password updated successfully. All devices have been logged out. Please log in again.',
     };
 };
 const claimAdmin = async (user, payload) => {
     const { email, currentPassword, newPassword } = payload;
-    const isExistUser = await user_model_1.User.findById(user.id).select('+password');
-    if (!isExistUser) {
+    const isExistUser = await prisma_1.prisma.user.findUnique({
+        where: { id: user.id },
+    });
+    if (!isExistUser || !isExistUser.passwordHash) {
         throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'Admin account not found');
     }
-    if (isExistUser.role !== user_1.USER_ROLES.ADMIN) {
+    if (isExistUser.role !== client_1.Role.ADMIN && !isExistUser.isRootAdmin) {
         throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Only admin accounts can perform initial setup');
     }
-    const isMatch = await user_model_1.User.isMatchPassword(currentPassword, isExistUser.password);
+    const isMatch = await bcrypt_1.default.compare(currentPassword, isExistUser.passwordHash);
     if (!isMatch) {
         throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Current password is incorrect');
     }
-    if (currentPassword === newPassword) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'New password must be different from current password');
-    }
-    if (email !== isExistUser.email.toLowerCase()) {
-        const emailInUse = await user_model_1.User.findOne({ email, _id: { $ne: isExistUser._id } });
-        if (emailInUse) {
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.CONFLICT, 'Email address is already in use by another account');
-        }
-    }
-    const hashPassword = await bcrypt_1.default.hash(newPassword, Number(config_1.default.bcrypt_salt_rounds));
-    const updatedAdmin = await user_model_1.User.findByIdAndUpdate(isExistUser._id, {
-        email,
-        password: hashPassword,
+    const hashPassword = await bcrypt_1.default.hash(newPassword, Number(config_1.default.bcrypt_salt_rounds) || 12);
+    const updatedAdmin = await prisma_1.prisma.user.update({
+        where: { id: isExistUser.id },
+        data: {
+            email,
+            passwordHash: hashPassword,
+            status: client_1.AccountStatus.ACTIVE,
+        },
+    });
+    const accessToken = jwtHelper_1.jwtHelper.createToken({
+        id: updatedAdmin.id,
+        sub: updatedAdmin.id,
+        email: updatedAdmin.email,
+        role: updatedAdmin.role,
+        status: updatedAdmin.status,
         accountState: user_1.ACCOUNT_STATE.VERIFIED,
-    }, { new: true });
-    if (!updatedAdmin) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR, 'Failed to update admin credentials');
-    }
-    const { accessToken, refreshToken } = (0, auth_helper_1.generateUserTokens)(updatedAdmin);
+    }, config_1.default.jwt.jwt_secret, config_1.default.jwt.jwt_expire_in || '1d');
     return {
-        tokens: { accessToken, refreshToken },
+        tokens: { accessToken, refreshToken: '' },
         user: {
-            id: updatedAdmin._id,
+            id: updatedAdmin.id,
             email: updatedAdmin.email,
         },
     };
 };
-const handleRegistrationTokenGeneration = (user) => {
-    const isApproved = true;
-    const { accessToken, refreshToken } = (0, auth_helper_1.generateUserTokens)({
-        _id: user._id,
-        role: user.role,
-        email: user.email,
-        accountState: user_1.ACCOUNT_STATE.VERIFIED,
-    });
-    return {
-        message: 'Email verified successfully.',
-        tokens: { accessToken, refreshToken },
-        data: {
-            accessToken,
-            refreshToken,
-            accountState: user_1.ACCOUNT_STATE.VERIFIED,
-            isApproved,
-        },
-    };
-};
-const handlePasswordResetTokenGeneration = async (userId) => {
-    const createToken = (0, cryptoToken_1.default)();
-    const hashedToken = crypto_1.default
-        .createHash('sha256')
-        .update(createToken)
-        .digest('hex');
-    await resetToken_model_1.ResetToken.create({
-        user: userId,
-        token: hashedToken,
-        expireAt: new Date(Date.now() + auth_constant_1.RESET_TOKEN_EXPIRY_MS),
-    });
-    return {
-        message: 'Verification Successful: Please securely store and utilize this code for reset password',
-        data: createToken,
-    };
-};
-const verifyOtp = async (payload) => {
-    const { email, oneTimeCode } = payload;
-    const isExistUser = await user_model_1.User.findOne({ email }).select('+authentication');
-    if (!isExistUser) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid email or verification code.');
-    }
-    if (isExistUser.accountState === user_1.ACCOUNT_STATE.SUSPENDED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been suspended. Please contact support.');
-    }
-    if (isExistUser.accountState === user_1.ACCOUNT_STATE.DEACTIVATED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been deactivated. Please contact support.');
-    }
-    const auth = isExistUser.authentication;
-    const storedOtpHash = auth?.hashedOtp;
-    const storedPurpose = auth?.purpose;
-    // Strict check: reject null / unknown purpose explicitly (no implicit fallback)
-    if (!storedPurpose ||
-        (storedPurpose !== 'REGISTRATION' && storedPurpose !== 'PASSWORD_RESET')) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid or expired verification session. Please request a new code.');
-    }
-    const date = new Date();
-    if (!auth?.expireAt || date > new Date(auth.expireAt)) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'This verification code has expired. Please request a new one.');
-    }
-    // Check code match using constant-time comparison
-    if (!storedOtpHash || !(0, cryptoHelpers_1.verifyOtpHash)(String(oneTimeCode), storedOtpHash)) {
-        const updatedUser = await user_model_1.User.findOneAndUpdate({ _id: isExistUser._id }, { $inc: { 'authentication.attempts': 1 } }, { new: true, select: '+authentication' });
-        const newAttempts = updatedUser?.authentication?.attempts || 0;
-        if (newAttempts >= auth_constant_1.OTP_MAX_ATTEMPTS) {
-            await user_model_1.User.findByIdAndUpdate(isExistUser._id, {
-                $set: {
-                    'authentication.hashedOtp': null,
-                    'authentication.expireAt': null,
-                    'authentication.purpose': null,
-                },
-            });
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Maximum verification attempts exceeded. Please request a new code.');
-        }
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid email or verification code.');
-    }
-    // Atomic CAS Consumption:
-    const consumedUser = await user_model_1.User.findOneAndUpdate({
-        _id: isExistUser._id,
-        'authentication.hashedOtp': storedOtpHash,
-        'authentication.expireAt': { $gt: new Date() },
-        'authentication.purpose': storedPurpose,
-    }, {
-        $set: {
-            'authentication.hashedOtp': null,
-            'authentication.expireAt': null,
-            'authentication.attempts': 0,
-            'authentication.purpose': null,
-            ...(storedPurpose === 'REGISTRATION'
-                ? {
-                    accountState: user_1.ACCOUNT_STATE.VERIFIED,
-                }
-                : {
-                    'authentication.isResetPassword': true,
-                }),
-        },
-    }, { new: false, select: '+authentication' });
-    if (!consumedUser) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Verification code has already been used or expired.');
-    }
-    const consumedPurpose = consumedUser.authentication?.purpose || storedPurpose;
-    if (consumedPurpose === 'REGISTRATION') {
-        return handleRegistrationTokenGeneration(consumedUser);
-    }
-    else if (consumedPurpose === 'PASSWORD_RESET') {
-        return handlePasswordResetTokenGeneration(consumedUser._id);
-    }
-    else {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Invalid verification purpose.');
-    }
-};
-const resendOtp = async (email) => {
-    const user = await user_model_1.User.findOne({ email }).select('+authentication');
-    if (!user) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'No account found with this email address.');
-    }
-    if (user.accountState === user_1.ACCOUNT_STATE.VERIFIED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Your email is already verified.');
-    }
-    if (user.accountState === user_1.ACCOUNT_STATE.SUSPENDED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been suspended. Please contact support.');
-    }
-    if (user.accountState === user_1.ACCOUNT_STATE.DEACTIVATED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been deactivated. Please contact support.');
-    }
-    // Rate limit: prevent resend within 60 seconds
-    const lastSent = user.authentication?.expireAt;
-    if (lastSent) {
-        const sentAtMs = new Date(lastSent).getTime() - auth_constant_1.OTP_EXPIRY_MS;
-        const elapsedMs = Date.now() - sentAtMs;
-        if (elapsedMs < auth_constant_1.OTP_COOLDOWN_MS) {
-            const waitSeconds = Math.ceil((auth_constant_1.OTP_COOLDOWN_MS - elapsedMs) / 1000);
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.TOO_MANY_REQUESTS, `Please wait ${waitSeconds} seconds before requesting a new code.`);
-        }
-    }
-    const session = await mongoose_1.default.startSession();
-    try {
-        await session.withTransaction(async () => {
-            const otp = (0, generateOTP_1.default)();
-            const emailPayload = {
-                name: user.name,
-                otp,
-                email: user.email,
-            };
-            await emailOutbox_model_1.EmailOutbox.create([
-                {
-                    to: user.email,
-                    type: 'VERIFY_EMAIL',
-                    template: 'CREATE_ACCOUNT',
-                    encryptedPayload: (0, cryptoHelpers_1.encryptPayload)(emailPayload),
-                    status: 'PENDING',
-                },
-            ], { session });
-            const currentPurpose = user.authentication?.purpose || 'REGISTRATION';
-            await user_model_1.User.findOneAndUpdate({ _id: user._id }, {
-                $set: {
-                    'authentication.hashedOtp': (0, cryptoHelpers_1.hashOtp)(String(otp)),
-                    'authentication.expireAt': new Date(Date.now() + auth_constant_1.OTP_EXPIRY_MS),
-                    'authentication.attempts': 0,
-                    'authentication.purpose': currentPurpose,
-                },
-                $push: {
-                    'authentication.resendTimestamps': new Date(),
-                },
-            }, { session });
-        });
-    }
-    finally {
-        await session.endSession();
-    }
-    return { message: 'A new verification code has been sent to your email.' };
-};
-const forgetPassword = async (email) => {
-    const isExistUser = await user_model_1.User.isExistUserByEmail(email);
-    if (!isExistUser) {
-        return {
-            message: 'If your email is registered, a one-time passcode (OTP) has been sent.',
-        };
-    }
-    if (isExistUser.accountState === user_1.ACCOUNT_STATE.SUSPENDED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been suspended. Please contact support.');
-    }
-    if (isExistUser.accountState === user_1.ACCOUNT_STATE.DEACTIVATED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.FORBIDDEN, 'Your account has been deactivated. Please contact support.');
-    }
-    const session = await mongoose_1.default.startSession();
-    try {
-        await session.withTransaction(async () => {
-            const otp = (0, generateOTP_1.default)();
-            const emailPayload = {
-                name: isExistUser.name,
-                otp,
-                email: isExistUser.email,
-            };
-            await emailOutbox_model_1.EmailOutbox.create([
-                {
-                    to: isExistUser.email,
-                    type: 'RESET_PASSWORD',
-                    template: 'RESET_PASSWORD',
-                    encryptedPayload: (0, cryptoHelpers_1.encryptPayload)(emailPayload),
-                    status: 'PENDING',
-                },
-            ], { session });
-            const authentication = {
-                hashedOtp: (0, cryptoHelpers_1.hashOtp)(String(otp)),
-                expireAt: new Date(Date.now() + auth_constant_1.OTP_EXPIRY_MS),
-                attempts: 0,
-                resendTimestamps: [new Date()],
-                purpose: 'PASSWORD_RESET',
-            };
-            await user_model_1.User.findOneAndUpdate({ email: isExistUser.email }, { $set: { authentication } }, { session });
-        });
-    }
-    finally {
-        await session.endSession();
-    }
-    return {
-        message: 'Please check your email. We have sent you a one-time passcode (OTP).',
-    };
-};
-const resetPassword = async (token, payload) => {
-    const cleanToken = token ? token.replace(/^Bearer\s+/i, '').trim() : '';
-    const { newPassword } = payload;
-    const hashedToken = crypto_1.default
-        .createHash('sha256')
-        .update(cleanToken)
-        .digest('hex');
-    // Atomic single-use consumption: find and delete in a single operation
-    const consumedToken = await resetToken_model_1.ResetToken.findOneAndDelete({
-        token: hashedToken,
-        expireAt: { $gt: new Date() },
-    });
-    if (!consumedToken) {
-        const expiredToken = await resetToken_model_1.ResetToken.findOne({ token: hashedToken });
-        if (expiredToken) {
-            throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Token expired, Please click again to the forget password');
-        }
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'You are not authorized');
-    }
-    const hashPassword = await bcrypt_1.default.hash(newPassword, Number(config_1.default.bcrypt_salt_rounds));
-    await user_model_1.User.findOneAndUpdate({ _id: consumedToken.user }, {
-        password: hashPassword,
-        $set: { 'authentication.isResetPassword': false },
-    });
-};
-const changePassword = async (user, payload) => {
-    const { currentPassword, newPassword } = payload;
-    const isExistUser = await user_model_1.User.findById(user.id).select('+password');
-    if (!isExistUser) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'No account found with this email address.');
-    }
-    const isMatch = await user_model_1.User.isMatchPassword(currentPassword, isExistUser.password);
-    if (!isMatch) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Password is incorrect');
-    }
-    if (currentPassword === newPassword) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Please give different password from current password');
-    }
-    const hashPassword = await bcrypt_1.default.hash(newPassword, Number(config_1.default.bcrypt_salt_rounds));
-    await user_model_1.User.findOneAndUpdate({ _id: user.id }, { password: hashPassword }, { new: true });
-};
-const loginUser = async (payload) => {
-    const { email, password, deviceToken } = payload;
-    const isExistUser = await user_model_1.User.findOne({ email }).select('+password');
-    if (!isExistUser) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Incorrect email or password. Please try again.');
-    }
-    if (isExistUser.accountState === user_1.ACCOUNT_STATE.UNVERIFIED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Please verify your email first. We sent a verification code to your email address.');
-    }
-    if (isExistUser.accountState === user_1.ACCOUNT_STATE.DEACTIVATED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Your account has been deactivated. Contact support.');
-    }
-    if (isExistUser.lockUntil && new Date() < new Date(isExistUser.lockUntil)) {
-        const remainingMinutes = Math.max(1, Math.ceil((new Date(isExistUser.lockUntil).getTime() - Date.now()) / (60 * 1000)));
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `Account is temporarily locked due to failed login attempts. Please try again in ${remainingMinutes} minutes.`);
-    }
-    const isMatch = await user_model_1.User.isMatchPassword(password, isExistUser.password);
-    if (!isMatch) {
-        const updatedUser = await user_model_1.User.findOneAndUpdate({ _id: isExistUser._id }, { $inc: { loginAttempts: 1 } }, { new: true });
-        const attempts = updatedUser?.loginAttempts || 1;
-        const { lockUntil, isLocked } = (0, auth_constant_1.calculateLockoutState)(attempts);
-        if (isLocked && lockUntil) {
-            await user_model_1.User.findOneAndUpdate({
-                _id: isExistUser._id,
-                $or: [
-                    { lockUntil: { $exists: false } },
-                    { lockUntil: null },
-                    { lockUntil: { $lt: lockUntil } },
-                ],
-            }, {
-                $set: {
-                    lockUntil,
-                    accountState: user_1.ACCOUNT_STATE.LOCKED,
-                },
-            });
-        }
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Incorrect email or password. Please try again.');
-    }
-    await user_model_1.User.findByIdAndUpdate(isExistUser._id, {
-        $set: {
-            loginAttempts: 0,
-            lockUntil: null,
-            accountState: isExistUser.accountState === user_1.ACCOUNT_STATE.LOCKED
-                ? user_1.ACCOUNT_STATE.VERIFIED
-                : isExistUser.accountState,
-        },
-    });
-    const { accessToken, refreshToken } = (0, auth_helper_1.generateUserTokens)(isExistUser);
-    if (deviceToken) {
-        await user_model_1.User.addDeviceToken(isExistUser._id.toString(), deviceToken);
-    }
-    const { isApproved, isOnboard } = (0, auth_helper_1.computeUserAccessState)(isExistUser);
-    const isSuspended = isExistUser.accountState === user_1.ACCOUNT_STATE.SUSPENDED;
-    const responseData = {
-        accessToken,
-        accountState: isExistUser.accountState,
-        ...(isExistUser.rejectionReason && {
-            rejectionReason: isExistUser.rejectionReason,
-        }),
-        ...(isSuspended && {
-            isRestricted: true,
-            blockReason: isExistUser.blockReason ?? null,
-        }),
-    };
-    return {
-        tokens: { accessToken, refreshToken },
-        data: responseData,
-        isOnboard: true,
-        isApproved: true,
-        ...(isSuspended && {
-            isRestricted: true,
-            blockReason: isExistUser.blockReason ?? null,
-        }),
-        rejectionReason: isExistUser.rejectionReason ?? null,
-    };
-};
-const logoutUser = async (user, deviceToken) => {
-    if (deviceToken) {
-        await user_model_1.User.removeDeviceToken(user.id, deviceToken);
-    }
-};
-const refreshToken = async (token) => {
-    if (!token) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Refresh token is required');
-    }
-    const decoded = jwtHelper_1.jwtHelper.verifyToken(token, config_1.default.jwt.jwt_refresh_secret);
-    const userId = decoded.id;
-    const user = await user_model_1.User.findById(userId);
-    if (!user) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.UNAUTHORIZED, 'No account found with this email address.');
-    }
-    if (user.accountState === user_1.ACCOUNT_STATE.UNVERIFIED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Please verify your email first.');
-    }
-    if (user.accountState === user_1.ACCOUNT_STATE.SUSPENDED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Your account has been restricted. Contact support.');
-    }
-    if (user.accountState === user_1.ACCOUNT_STATE.DEACTIVATED) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Your account has been deactivated. Contact support.');
-    }
-    if (user.lockUntil && new Date() < new Date(user.lockUntil)) {
-        throw new ApiError_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, 'Account is temporarily locked due to failed login attempts.');
-    }
-    const { accessToken, refreshToken: newRefreshToken } = (0, auth_helper_1.generateUserTokens)(user);
-    return { tokens: { accessToken, refreshToken: newRefreshToken } };
-};
 const getMyStatus = async (userId) => {
-    const user = await user_model_1.User.findById(userId)
-        .select('name email role appState accountState isOnboard rejectionReason blockReason serviceAreaId')
-        .lean();
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+            operatorProfile: true,
+        },
+    });
     if (!user) {
         throw new ApiError_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, 'User not found');
     }
-    const { isApproved } = (0, auth_helper_1.computeUserAccessState)(user);
     return {
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        accountState: user.accountState,
-        isApproved,
-        rejectionReason: user.rejectionReason ?? null,
-        blockReason: user.blockReason ?? null,
+        status: user.status,
+        accountState: user.status === client_1.AccountStatus.ACTIVE ? user_1.ACCOUNT_STATE.VERIFIED : user.status,
+        isEmailVerified: user.isEmailVerified,
+        phoneNumber: user.phoneNumber,
+        phone: user.phoneNumber,
+        companyName: user.operatorProfile?.companyName,
+        contactPersonName: user.operatorProfile?.contactPersonName,
+        operatorProfile: user.operatorProfile,
+        isApproved: user.status === client_1.AccountStatus.ACTIVE || user.isEmailVerified,
     };
 };
 exports.AuthService = {
     registerUser,
-    claimAdmin,
-    verifyOtp,
-    resendOtp,
-    forgetPassword,
+    verifyEmail,
+    resendVerificationEmail,
+    loginUser,
+    refreshToken,
+    logoutUser,
+    logoutAll,
+    forgotPassword,
     resetPassword,
     changePassword,
-    loginUser,
-    logoutUser,
-    refreshToken,
+    claimAdmin,
     getMyStatus,
 };
 //# sourceMappingURL=auth.service.js.map

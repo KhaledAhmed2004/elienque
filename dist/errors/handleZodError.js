@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const zod_1 = require("zod");
 const fastest_levenshtein_1 = require("fastest-levenshtein");
 // Clean the path (always returns string)
 const cleanPath = (pathArray) => pathArray.join('.').replace(/^body\./, '');
@@ -10,14 +9,18 @@ const handleZodError = (error) => {
     const coveredFields = [];
     // Collect expected fields for suggestions
     const expectedFields = Array.from(new Set((error.issues || error.errors || [])
-        .flatMap((issue) => issue.code === zod_1.ZodIssueCode.invalid_type && issue.path.length > 1
-        ? [String(issue.path[1])]
-        : [])
+        .flatMap((issue) => {
+        if (issue.code === 'invalid_type' && issue.path && issue.path.length > 0) {
+            const field = issue.path[issue.path.length - 1];
+            return field ? [String(field)] : [];
+        }
+        return [];
+    })
         .filter(Boolean)));
     // Single pass over all Zod issues
     (error.issues || error.errors || []).forEach((issue) => {
         switch (issue.code) {
-            case zod_1.ZodIssueCode.unrecognized_keys: {
+            case 'unrecognized_keys': {
                 const unrec = issue;
                 (unrec.keys || []).forEach((key) => {
                     const cleanKey = key.replace(/^body\./, '');
@@ -33,10 +36,15 @@ const handleZodError = (error) => {
                 });
                 break;
             }
-            case zod_1.ZodIssueCode.invalid_type: {
+            case 'invalid_type': {
                 const invalid = issue;
                 const path = cleanPath(invalid.path);
-                if (invalid.received === 'undefined') {
+                const received = invalid.received ??
+                    (typeof invalid.message === 'string' &&
+                        invalid.message.includes('received undefined')
+                        ? 'undefined'
+                        : (invalid.message?.match(/received\s+([a-zA-Z0-9_]+)/)?.[1] ?? undefined));
+                if (received === 'undefined') {
                     // Missing field
                     missingFields.push(path);
                 }
@@ -44,7 +52,7 @@ const handleZodError = (error) => {
                     // Type mismatch
                     allErrorMessages.push({
                         path,
-                        message: `Expected ${invalid.expected} for '${path}', but received ${invalid.received}.`,
+                        message: `Expected ${invalid.expected} for '${path}', but received ${received || 'invalid value'}.`,
                     });
                 }
                 break;

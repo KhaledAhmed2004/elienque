@@ -6,15 +6,18 @@ const lead_interface_1 = require("./lead.interface");
 const businessLeadSchema = new mongoose_1.Schema({
     businessName: { type: String, required: true },
     ownerName: { type: String, required: true },
-    phone: { type: String, required: true, unique: true },
-    email: { type: String, required: true, unique: true },
+    phone: { type: String, required: true },
+    email: { type: String, required: true },
     address: { type: String, required: true },
     promoterId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', default: null },
     status: {
         type: String,
         enum: Object.values(lead_interface_1.LeadStatus),
         default: lead_interface_1.LeadStatus.PENDING,
     },
+    adminNote: { type: String, default: null },
+    rejectReason: { type: String, default: null },
 }, {
     timestamps: true,
 });
